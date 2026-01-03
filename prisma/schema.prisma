@@ -7,10 +7,53 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-
 model User {
-  id    Int     @id @default(autoincrement())
-  email String  @unique
-  name  String?
+  id            Int       @id @default(autoincrement())
+  phoneNumber   String    @unique
+  password      String
+  name          String?
+  bio           String?
+  age           Int?
+  gender        String?
+  latitude      Float?
+  longitude     Float?
+  images        String[]  @default([])
+  imagePublicIds String[] @default([])
+  isVerified    Boolean   @default(false)
+  otp           String?
+  otpExpiresAt  DateTime?
+  otpAttempts   Int       @default(0)
+  lastOtpSentAt DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  confessions   Confession[]
+  matchesAsUser1 Match[]   @relation("User1Matches")
+  matchesAsUser2 Match[]   @relation("User2Matches")
+}
+
+model Confession {
+  id          Int       @id @default(autoincrement())
+  userId      Int
+  targetUserId Int?
+  description String
+  latitude    Float?
+  longitude   Float?
+  isMatched   Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Match {
+  id        Int      @id @default(autoincrement())
+  user1Id   Int
+  user2Id   Int
+  matchedAt DateTime @default(now())
+
+  user1     User     @relation("User1Matches", fields: [user1Id], references: [id], onDelete: Cascade)
+  user2     User     @relation("User2Matches", fields: [user2Id], references: [id], onDelete: Cascade)
+
+  @@unique([user1Id, user2Id])
 }
 
