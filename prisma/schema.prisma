@@ -20,6 +20,16 @@ model User {
   images        String[]  @default([])
   imagePublicIds String[] @default([])
   isVerified    Boolean   @default(false)
+  
+  // Face Verification Fields
+  profilePhoto        String?   // Primary profile photo URL (Cloudinary)
+  profilePhotoPublicId String?  // Cloudinary public ID for profile photo
+  faceId              String?   // AWS Rekognition FaceId (for face collection if used)
+  verificationStatus  String?   // 'pending', 'photo_uploaded', 'liveness_pending', 'verified', 'failed'
+  verificationScore   Float?    // 0-100 similarity score from face comparison
+  verificationDate    DateTime?
+  livenessSessionId   String?   // Session ID for liveness verification
+  
   otp           String?
   otpExpiresAt  DateTime?
   otpAttempts   Int       @default(0)
@@ -30,6 +40,16 @@ model User {
   confessions   Confession[]
   matchesAsUser1 Match[]   @relation("User1Matches")
   matchesAsUser2 Match[]   @relation("User2Matches")
+  
+  // Swipe relations
+  swipesMade     Swipe[]   @relation("SwipesMade")
+  swipesReceived Swipe[]   @relation("SwipesReceived")
+  
+  // Chat relations
+  messages       Message[]
+  
+  @@index([isVerified])
+  @@index([verificationStatus])
 }
 
 model Confession {
@@ -46,14 +66,56 @@ model Confession {
 }
 
 model Match {
-  id        Int      @id @default(autoincrement())
+  id        Int       @id @default(autoincrement())
   user1Id   Int
   user2Id   Int
-  matchedAt DateTime @default(now())
+  matchedAt DateTime  @default(now())
 
-  user1     User     @relation("User1Matches", fields: [user1Id], references: [id], onDelete: Cascade)
-  user2     User     @relation("User2Matches", fields: [user2Id], references: [id], onDelete: Cascade)
+  user1     User      @relation("User1Matches", fields: [user1Id], references: [id], onDelete: Cascade)
+  user2     User      @relation("User2Matches", fields: [user2Id], references: [id], onDelete: Cascade)
+  chatRoom  ChatRoom?
 
   @@unique([user1Id, user2Id])
 }
 
+// Track swipe actions (likes/passes)
+model Swipe {
+  id          Int      @id @default(autoincrement())
+  swiperId    Int      // User who swiped
+  swipedId    Int      // User being swiped on
+  direction   String   // 'like' or 'pass'
+  createdAt   DateTime @default(now())
+
+  swiper      User     @relation("SwipesMade", fields: [swiperId], references: [id], onDelete: Cascade)
+  swiped      User     @relation("SwipesReceived", fields: [swipedId], references: [id], onDelete: Cascade)
+
+  @@unique([swiperId, swipedId])
+  @@index([swipedId, direction])
+}
+
+// Chat room created when two users match
+model ChatRoom {
+  id        Int       @id @default(autoincrement())
+  matchId   Int       @unique
+  createdAt DateTime  @default(now())
+
+  match     Match     @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  messages  Message[]
+}
+
+// Individual chat messages
+model Message {
+  id         Int      @id @default(autoincrement())
+  chatRoomId Int
+  senderId   Int
+  content    String?   // Make content optional as it might be just an image
+  type       String   @default("text") // text, image, video, audio
+  mediaUrl   String?
+  createdAt  DateTime @default(now())
+  isRead     Boolean  @default(false)
+
+  chatRoom   ChatRoom @relation(fields: [chatRoomId], references: [id], onDelete: Cascade)
+  sender     User     @relation(fields: [senderId], references: [id], onDelete: Cascade)
+
+  @@index([chatRoomId, createdAt])
+}

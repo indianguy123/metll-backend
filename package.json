@@ -18,14 +18,13 @@
   "license": "ISC",
   "type": "commonjs",
   "devDependencies": {
-    "@prisma/client": "^5.22.0",
     "@types/bcryptjs": "^2.4.6",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
+    "@types/fluent-ffmpeg": "^2.1.28",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/multer": "^2.0.0",
     "@types/node": "^25.0.3",
-    "express-rate-limit": "^6.11.2",
     "nodemon": "^3.1.11",
     "prisma": "^5.22.0",
     "ts-node": "^10.9.2",
@@ -33,6 +32,8 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
+    "@aws-sdk/client-rekognition": "^3.966.0",
+    "@prisma/client": "^5.22.0",
     "bcryptjs": "^3.0.3",
     "cloudinary": "^2.8.0",
     "cors": "^2.8.5",
@@ -40,8 +41,10 @@
     "express": "^5.2.1",
     "express-rate-limit": "^7.4.1",
     "express-validator": "^7.3.1",
+    "fluent-ffmpeg": "^2.1.3",
     "jsonwebtoken": "^9.0.3",
     "multer": "^2.0.2",
+    "socket.io": "^4.8.3",
     "twilio": "^5.11.1"
   }
 }

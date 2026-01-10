@@ -43,7 +43,6 @@ export const createConfession = async (
           select: {
             id: true,
             name: true,
-            email: true,
           },
         },
       },
@@ -92,7 +91,6 @@ export const getConfessions = async (
           select: {
             id: true,
             name: true,
-            email: true,
           },
         },
       },

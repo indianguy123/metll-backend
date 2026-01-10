@@ -609,7 +609,7 @@ export const updateProfile = async (req: AuthRequest, res: Response): Promise<vo
  * Logout user (client-side token removal)
  * POST /api/auth/logout
  */
-export const logout = async (req: AuthRequest, res: Response): Promise<void> => {
+export const logout = async (_req: AuthRequest, res: Response): Promise<void> => {
   try {
     // Since we're using JWT, logout is handled client-side by removing the token
     // This endpoint is for consistency and can be used for logging/logout events

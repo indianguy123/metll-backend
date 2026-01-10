@@ -80,3 +80,35 @@ export const deleteImagesFromCloudinary = async (publicIds: string[]): Promise<v
   }
 };
 
+/**
+ * Upload video to Cloudinary for verification
+ */
+export const uploadVideoToCloudinary = async (
+  buffer: Buffer,
+  userId: number,
+  folder: string = 'verification'
+): Promise<UploadResult> => {
+  return new Promise((resolve, reject) => {
+    const uploadStream = cloudinary.uploader.upload_stream(
+      {
+        folder: `metll/users/${userId}/${folder}`,
+        resource_type: 'video',
+        format: 'mp4',
+      },
+      (error: UploadApiErrorResponse | undefined, result: UploadApiResponse | undefined) => {
+        if (error) {
+          reject(new Error(`Cloudinary video upload failed: ${error.message}`));
+        } else if (result) {
+          resolve({
+            url: result.secure_url,
+            publicId: result.public_id,
+          });
+        } else {
+          reject(new Error('Cloudinary video upload failed: No result returned'));
+        }
+      }
+    );
+
+    bufferToStream(buffer).pipe(uploadStream);
+  });
+};
