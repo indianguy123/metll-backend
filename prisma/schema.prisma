@@ -21,6 +21,7 @@ model User {
   images        String[]  @default([])
   imagePublicIds String[] @default([])
   isVerified    Boolean   @default(false)
+  isOnboarded   Boolean   @default(false)  // Set to true after user completes onboarding (uploads verification video)
   
   // Additional Photos (Cloudinary URLs)
   additionalPhotos      String[]  @default([])

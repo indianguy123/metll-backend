@@ -490,16 +490,18 @@ export const uploadVerificationVideo = async (req: AuthRequest, res: Response): 
       'verification'
     );
 
-    // Update user
+    // Update user and mark as onboarded (verification video is the final onboarding step)
     const updatedUser = await prisma.user.update({
       where: { id: userId },
       data: {
         verificationVideo: result.url,
         verificationVideoId: result.publicId,
+        isOnboarded: true,  // Mark user as fully onboarded
       },
       select: {
         id: true,
         verificationVideo: true,
+        isOnboarded: true,
       },
     });
 
