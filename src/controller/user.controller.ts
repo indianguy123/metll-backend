@@ -42,11 +42,12 @@ interface HomeLocation {
   past?: LocationInfo;
 }
 
-interface SituationResponse {
-  questionId: number;
-  answer: string;
-  answeredAt: string;
-}
+// SituationResponse type (used for documentation/reference)
+// interface SituationResponse {
+//   questionId: number;
+//   answer: string;
+//   answeredAt: string;
+// }
 
 /**
  * Update user profile with all profile data
