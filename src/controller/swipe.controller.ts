@@ -224,21 +224,38 @@ export const getSwipeProfiles = async (req: AuthRequest, res: Response): Promise
             return;
         }
 
+        console.log(`[getSwipeProfiles] User ID: ${userId}`);
+
+        // Get total count of all users
+        const totalUsers = await prisma.user.count();
+        console.log(`[getSwipeProfiles] Total users in database: ${totalUsers}`);
+
         // Get IDs of users already swiped on
         const swipedUsers = await prisma.swipe.findMany({
             where: { swiperId: userId },
             select: { swipedId: true },
         });
         const swipedIds = swipedUsers.map((s) => s.swipedId);
+        console.log(`[getSwipeProfiles] Already swiped on ${swipedIds.length} users:`, swipedIds);
+
+        // Get all user IDs to see what we're excluding
+        const allUserIds = await prisma.user.findMany({
+            select: { id: true },
+        });
+        const allIds = allUserIds.map(u => u.id);
+        console.log(`[getSwipeProfiles] All user IDs in database:`, allIds);
+
+        // Build exclusion list
+        const excludeIds = [userId, ...swipedIds];
+        console.log(`[getSwipeProfiles] Excluding IDs:`, excludeIds);
 
         // Get profiles to show (excluding self and already swiped)
+        // Removed isVerified requirement to show all profiles in database
         const profiles = await prisma.user.findMany({
             where: {
                 id: {
-                    notIn: [userId, ...swipedIds],
+                    notIn: excludeIds,
                 },
-                // Only show verified users (removed image requirement for testing)
-                isVerified: true,
             },
             select: {
                 id: true,
@@ -258,6 +275,15 @@ export const getSwipeProfiles = async (req: AuthRequest, res: Response): Promise
             },
             take: 20, // Limit to 20 profiles at a time
         });
+
+        console.log(`[getSwipeProfiles] Found ${profiles.length} profiles for user ${userId}`);
+        if (profiles.length > 0) {
+            console.log(`[getSwipeProfiles] Profile IDs:`, profiles.map(p => p.id));
+        } else {
+            console.log(`[getSwipeProfiles] No profiles found. Possible reasons:`);
+            console.log(`  - All users have been swiped (swiped: ${swipedIds.length}, total: ${totalUsers})`);
+            console.log(`  - Only one user in database (current user)`);
+        }
 
         res.status(200).json({
             success: true,
