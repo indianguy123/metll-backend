@@ -7,6 +7,8 @@ import {
   getProfile,
   updateProfile,
   logout,
+  forgotPassword,
+  resetPassword,
 } from '../controller/auth.controller';
 import { protect } from '../middleware/auth.middleware';
 import {
@@ -26,6 +28,8 @@ router.post('/register', registerRateLimiter, register);
 router.post('/verify-otp', verifyOTP);
 router.post('/login', loginRateLimiter, login);
 router.post('/resend-otp', otpRateLimiter, resendOTP);
+router.post('/forgot-password', otpRateLimiter, forgotPassword);
+router.post('/reset-password', resetPassword);
 
 // Protected routes
 router.get('/profile', protect, getProfile);

@@ -626,3 +626,190 @@ export const logout = async (_req: AuthRequest, res: Response): Promise<void> =>
     });
   }
 };
+
+/**
+ * Forgot Password - Send OTP for password reset
+ * POST /api/auth/forgot-password
+ * 
+ * Security: Rate limited, sends OTP to registered phone
+ */
+export const forgotPassword = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { phoneNumber } = req.body;
+
+    if (!phoneNumber) {
+      res.status(400).json({
+        success: false,
+        message: 'Phone number is required',
+      });
+      return;
+    }
+
+    // Normalize phone number
+    const normalizedPhone = normalizePhoneNumber(phoneNumber);
+
+    // Find user
+    const user = await prisma.user.findUnique({
+      where: { phoneNumber: normalizedPhone },
+    });
+
+    if (!user) {
+      // Don't reveal if user exists (security best practice)
+      // Still return success to prevent phone enumeration
+      res.status(200).json({
+        success: true,
+        message: 'If this phone number is registered, you will receive an OTP.',
+      });
+      return;
+    }
+
+    // Check OTP cooldown (1 minute between requests)
+    if (user.lastOtpSentAt) {
+      const timeSinceLastOTP = Date.now() - user.lastOtpSentAt.getTime();
+      const cooldownMs = 60 * 1000; // 1 minute
+
+      if (timeSinceLastOTP < cooldownMs) {
+        const remainingSeconds = Math.ceil((cooldownMs - timeSinceLastOTP) / 1000);
+        res.status(429).json({
+          success: false,
+          message: `Please wait ${remainingSeconds} seconds before requesting another OTP`,
+        });
+        return;
+      }
+    }
+
+    // Generate OTP
+    const otp = generateOTP();
+    const otpExpiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+
+    // Update user with new OTP
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        otp,
+        otpExpiresAt,
+        lastOtpSentAt: new Date(),
+        otpAttempts: 0, // Reset attempts for new OTP
+      },
+    });
+
+    // Send OTP via SMS
+    await sendOTPSMS(normalizedPhone, otp);
+
+    res.status(200).json({
+      success: true,
+      message: 'OTP sent to your phone number for password reset.',
+    });
+  } catch (error: any) {
+    console.error('Forgot password error:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to process forgot password request',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined,
+    });
+  }
+};
+
+/**
+ * Reset Password - Verify OTP and set new password
+ * POST /api/auth/reset-password
+ * 
+ * Security: OTP verification required, password hashed
+ */
+export const resetPassword = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { phoneNumber, otp, newPassword } = req.body;
+
+    if (!phoneNumber || !otp || !newPassword) {
+      res.status(400).json({
+        success: false,
+        message: 'Phone number, OTP, and new password are required',
+      });
+      return;
+    }
+
+    // Validate password strength
+    if (newPassword.length < 8) {
+      res.status(400).json({
+        success: false,
+        message: 'Password must be at least 8 characters long',
+      });
+      return;
+    }
+
+    // Normalize phone number
+    const normalizedPhone = normalizePhoneNumber(phoneNumber);
+
+    // Find user
+    const user = await prisma.user.findUnique({
+      where: { phoneNumber: normalizedPhone },
+    });
+
+    if (!user) {
+      res.status(400).json({
+        success: false,
+        message: 'Invalid phone number or OTP',
+      });
+      return;
+    }
+
+    // Check OTP attempts (prevent brute force)
+    if (user.otpAttempts >= 5) {
+      res.status(429).json({
+        success: false,
+        message: 'Too many OTP attempts. Please request a new OTP.',
+      });
+      return;
+    }
+
+    // Check if OTP expired
+    if (!user.otp || !user.otpExpiresAt || isOTPExpired(user.otpExpiresAt)) {
+      res.status(400).json({
+        success: false,
+        message: 'OTP has expired. Please request a new one.',
+      });
+      return;
+    }
+
+    // Verify OTP
+    if (user.otp !== otp) {
+      // Increment attempts
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { otpAttempts: { increment: 1 } },
+      });
+
+      res.status(400).json({
+        success: false,
+        message: 'Invalid OTP',
+      });
+      return;
+    }
+
+    // Hash new password
+    const hashedPassword = await bcrypt.hash(newPassword, 12);
+
+    // Update password and clear OTP
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        password: hashedPassword,
+        otp: null,
+        otpExpiresAt: null,
+        otpAttempts: 0,
+      },
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'Password reset successfully. You can now login with your new password.',
+    });
+  } catch (error: any) {
+    console.error('Reset password error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to reset password',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined,
+    });
+  }
+};
