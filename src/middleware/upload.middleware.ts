@@ -89,7 +89,7 @@ const verificationPhotoUpload = multer({
   },
 });
 
-// Configure multer for verification video (single video, 20MB)
+// Configure multer for verification video (single video, 100MB)
 const verificationVideoFilter = (
   _req: Request,
   file: Express.Multer.File,
@@ -107,7 +107,7 @@ const verificationVideoUpload = multer({
   storage,
   fileFilter: verificationVideoFilter,
   limits: {
-    fileSize: 20 * 1024 * 1024, // 20MB
+    fileSize: 100 * 1024 * 1024, // 100MB
     files: 1,
   },
 });
@@ -129,7 +129,7 @@ export const handleVerificationUploadError = (
     if (err.code === 'LIMIT_FILE_SIZE') {
       return res.status(400).json({
         success: false,
-        message: 'File size too large. Maximum size is 5MB for photos, 20MB for videos.',
+        message: 'File size too large. Maximum size is 5MB for photos, 100MB for videos.',
       });
     }
   }
