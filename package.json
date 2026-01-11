@@ -34,6 +34,7 @@
   "dependencies": {
     "@aws-sdk/client-rekognition": "^3.966.0",
     "@prisma/client": "^5.22.0",
+    "agora-access-token": "^2.0.4",
     "bcryptjs": "^3.0.3",
     "cloudinary": "^2.8.0",
     "cors": "^2.8.5",

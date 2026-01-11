@@ -120,6 +120,7 @@ model ChatRoom {
 
   match     Match     @relation(fields: [matchId], references: [id], onDelete: Cascade)
   messages  Message[]
+  calls     Call[]
 }
 
 // Individual chat messages
@@ -137,4 +138,25 @@ model Message {
   sender     User     @relation(fields: [senderId], references: [id], onDelete: Cascade)
 
   @@index([chatRoomId, createdAt])
+}
+
+// Voice/Video calls between matched users
+model Call {
+  id          Int       @id @default(autoincrement())
+  chatRoomId  Int
+  callerId    Int       // User who initiated the call
+  receiverId  Int       // User receiving the call
+  channelName String    @unique  // Agora channel name
+  status      String    @default("pending") // pending, active, ended, missed
+  type        String    @default("voice")   // voice or video
+  startedAt   DateTime?
+  endedAt     DateTime?
+  duration    Int?      // Call duration in seconds
+  createdAt   DateTime  @default(now())
+
+  chatRoom    ChatRoom  @relation(fields: [chatRoomId], references: [id], onDelete: Cascade)
+
+  @@index([chatRoomId, createdAt])
+  @@index([callerId])
+  @@index([receiverId])
 }
