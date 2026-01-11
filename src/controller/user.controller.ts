@@ -6,6 +6,7 @@ import {
   uploadImageToCloudinary,
   uploadVideoToCloudinary,
   deleteImagesFromCloudinary,
+  deleteImageFromCloudinary,
 } from '../services/cloudinary.service';
 
 // Type definitions for profile data
@@ -165,6 +166,115 @@ export const updateUserProfile = async (req: AuthRequest, res: Response): Promis
     res.status(500).json({
       success: false,
       message: 'Failed to update profile',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined,
+    });
+  }
+};
+
+/**
+ * Upload profile picture (initial profile photo - first step of onboarding)
+ * POST /api/user/profile-picture
+ * 
+ * Flow:
+ * 1. Upload image to Cloudinary
+ * 2. Update database with new photo URL
+ * 3. Return success only if both steps complete
+ */
+export const uploadProfilePicture = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const userId = req.user?.id;
+
+    if (!userId) {
+      res.status(401).json({
+        success: false,
+        message: 'Unauthorized',
+      });
+      return;
+    }
+
+    const file = req.file as Express.Multer.File;
+
+    if (!file) {
+      res.status(400).json({
+        success: false,
+        message: 'No image provided. Please upload a profile picture.',
+      });
+      return;
+    }
+
+    // Get current profile photo to delete later
+    const currentUser = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { profilePhotoPublicId: true },
+    });
+
+    // Step 1: Upload to Cloudinary
+    let uploadResult;
+    try {
+      uploadResult = await uploadImageToCloudinary(
+        file.buffer,
+        userId,
+        'profile'
+      );
+    } catch (uploadError: any) {
+      console.error('Cloudinary upload failed:', uploadError);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to upload image. Please try again.',
+        error: process.env.NODE_ENV === 'development' ? uploadError.message : undefined,
+      });
+      return;
+    }
+
+    // Step 2: Update database with new photo URL
+    try {
+      const updatedUser = await prisma.user.update({
+        where: { id: userId },
+        data: {
+          profilePhoto: uploadResult.url,
+          profilePhotoPublicId: uploadResult.publicId,
+        },
+        select: {
+          id: true,
+          profilePhoto: true,
+          name: true,
+        },
+      });
+
+      // Delete old profile photo from Cloudinary (if exists) - non-blocking
+      if (currentUser?.profilePhotoPublicId) {
+        deleteImageFromCloudinary(currentUser.profilePhotoPublicId).catch(err => {
+          console.error('Failed to delete old profile photo:', err);
+        });
+      }
+
+      res.status(200).json({
+        success: true,
+        message: 'Profile picture uploaded successfully',
+        data: {
+          photo: updatedUser.profilePhoto,
+          userId: updatedUser.id,
+        },
+      });
+    } catch (dbError: any) {
+      // Database update failed - try to clean up the uploaded image
+      console.error('Database update failed:', dbError);
+      deleteImageFromCloudinary(uploadResult.publicId).catch(err => {
+        console.error('Failed to cleanup uploaded image:', err);
+      });
+
+      res.status(500).json({
+        success: false,
+        message: 'Failed to save profile picture. Please try again.',
+        error: process.env.NODE_ENV === 'development' ? dbError.message : undefined,
+      });
+      return;
+    }
+  } catch (error: any) {
+    console.error('Upload profile picture error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to upload profile picture',
       error: process.env.NODE_ENV === 'development' ? error.message : undefined,
     });
   }

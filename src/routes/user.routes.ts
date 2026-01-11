@@ -2,6 +2,7 @@ import { Router } from 'express';
 import {
   updateUserProfile,
   getUserProfile,
+  uploadProfilePicture,
   uploadAdditionalPhotos,
   deleteAdditionalPhoto,
   uploadVerificationVideo as uploadVerificationVideoHandler,
@@ -14,6 +15,7 @@ import {
 import { protect } from '../middleware/auth.middleware';
 import {
   uploadProfileImages,
+  uploadVerificationPhoto,
   uploadVerificationVideo as uploadVerificationVideoMiddleware,
   handleUploadError,
   handleVerificationUploadError,
@@ -28,7 +30,10 @@ router.use(protect);
 router.get('/profile', getUserProfile);
 router.put('/profile', updateUserProfile);
 
-// Photo routes
+// Profile picture (initial photo - first step of onboarding)
+router.post('/profile-picture', uploadVerificationPhoto, handleVerificationUploadError, uploadProfilePicture);
+
+// Additional photos (6 photos, 3 required - later step)
 router.post('/photos', uploadProfileImages, handleUploadError, uploadAdditionalPhotos);
 router.delete('/photos/:index', deleteAdditionalPhoto);
 
