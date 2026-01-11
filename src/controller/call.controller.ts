@@ -130,7 +130,7 @@ export const initiateCall = async (req: AuthRequest, res: Response): Promise<voi
         const io = getSocketIO();
         if (io) {
             const caller = match.user1Id === userId ? match.user1 : match.user2;
-            io.to(`user:${receiverId}`).emit('incoming_call', {
+            const callData = {
                 callId: call.id,
                 matchId,
                 channelName,
@@ -140,7 +140,12 @@ export const initiateCall = async (req: AuthRequest, res: Response): Promise<voi
                 type,
                 token: receiverToken,
                 appId: AGORA_APP_ID,
-            });
+            };
+            console.log(`📞 Emitting incoming_call to user:${receiverId}`, callData);
+            io.to(`user:${receiverId}`).emit('incoming_call', callData);
+            console.log(`✅ Incoming call event emitted to user:${receiverId}`);
+        } else {
+            console.error('❌ Socket.io instance not available, cannot emit incoming_call');
         }
 
         res.status(201).json({
