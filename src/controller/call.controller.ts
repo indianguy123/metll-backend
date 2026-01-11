@@ -3,7 +3,6 @@ import prisma from '../config/database.config';
 import { AuthRequest } from '../types';
 import { getSocketIO } from '../config/socket.config';
 import { RtcTokenBuilder, RtcRole } from 'agora-access-token';
-import { v4 as uuidv4 } from 'uuid';
 
 // Get Agora credentials from environment
 const AGORA_APP_ID = process.env.AGORA_APP_ID || '';
@@ -39,7 +38,7 @@ const generateAgoraToken = (channelName: string, uid: number): string => {
  */
 export const initiateCall = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
-        const userId = req.userId;
+        const userId = req.user?.id;
         const { matchId, type = 'voice' } = req.body;
 
         if (!userId) {
@@ -129,16 +128,18 @@ export const initiateCall = async (req: AuthRequest, res: Response): Promise<voi
 
         // Emit socket event to notify receiver of incoming call
         const io = getSocketIO();
-        io.to(`user:${receiverId}`).emit('incoming_call', {
-            callId: call.id,
-            channelName,
-            callerId,
-            callerName: match.user1Id === userId ? match.user1.name : match.user2.name,
-            callerPhoto: match.user1Id === userId ? match.user1.profilePhoto : match.user2.profilePhoto,
-            type,
-            token: receiverToken,
-            appId: AGORA_APP_ID,
-        });
+        if (io) {
+            io.to(`user:${receiverId}`).emit('incoming_call', {
+                callId: call.id,
+                channelName,
+                callerId,
+                callerName: match.user1Id === userId ? match.user1.name : match.user2.name,
+                callerPhoto: match.user1Id === userId ? match.user1.profilePhoto : match.user2.profilePhoto,
+                type,
+                token: receiverToken,
+                appId: AGORA_APP_ID,
+            });
+        }
 
         res.status(201).json({
             success: true,
@@ -167,7 +168,7 @@ export const initiateCall = async (req: AuthRequest, res: Response): Promise<voi
  */
 export const endCall = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
-        const userId = req.userId;
+        const userId = req.user?.id;
         const callId = parseInt(req.params.id);
 
         if (!userId) {
@@ -216,10 +217,12 @@ export const endCall = async (req: AuthRequest, res: Response): Promise<void> =>
         // Notify the other participant
         const otherUserId = call.callerId === userId ? call.receiverId : call.callerId;
         const io = getSocketIO();
-        io.to(`user:${otherUserId}`).emit('call_ended', {
-            callId: call.id,
-            duration,
-        });
+        if (io) {
+            io.to(`user:${otherUserId}`).emit('call_ended', {
+                callId: call.id,
+                duration,
+            });
+        }
 
         res.json({
             success: true,
@@ -241,7 +244,7 @@ export const endCall = async (req: AuthRequest, res: Response): Promise<void> =>
  */
 export const answerCall = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
-        const userId = req.userId;
+        const userId = req.user?.id;
         const callId = parseInt(req.params.id);
 
         if (!userId) {
@@ -286,9 +289,11 @@ export const answerCall = async (req: AuthRequest, res: Response): Promise<void>
 
         // Notify caller that call was answered
         const io = getSocketIO();
-        io.to(`user:${call.callerId}`).emit('call_answered', {
-            callId: call.id,
-        });
+        if (io) {
+            io.to(`user:${call.callerId}`).emit('call_answered', {
+                callId: call.id,
+            });
+        }
 
         res.json({
             success: true,
@@ -310,7 +315,7 @@ export const answerCall = async (req: AuthRequest, res: Response): Promise<void>
  */
 export const declineCall = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
-        const userId = req.userId;
+        const userId = req.user?.id;
         const callId = parseInt(req.params.id);
 
         if (!userId) {
@@ -355,9 +360,11 @@ export const declineCall = async (req: AuthRequest, res: Response): Promise<void
 
         // Notify caller that call was declined
         const io = getSocketIO();
-        io.to(`user:${call.callerId}`).emit('call_declined', {
-            callId: call.id,
-        });
+        if (io) {
+            io.to(`user:${call.callerId}`).emit('call_declined', {
+                callId: call.id,
+            });
+        }
 
         res.json({
             success: true,
