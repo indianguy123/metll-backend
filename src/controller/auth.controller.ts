@@ -125,9 +125,9 @@ export const register = async (req: AuthRequest, res: Response): Promise<void> =
  */
 export const verifyOTP = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const { phoneNumber, otp } = req.body;
+    const { phone, otp } = req.body;
 
-    if (!phoneNumber || !otp) {
+    if (!phone || !otp) {
       res.status(400).json({
         success: false,
         message: 'Phone number and OTP are required',
@@ -136,7 +136,7 @@ export const verifyOTP = async (req: AuthRequest, res: Response): Promise<void> 
     }
 
     // Normalize phone number
-    const normalizedPhone = normalizePhoneNumber(phoneNumber);
+    const normalizedPhone = normalizePhoneNumber(phone);
 
     // Find user
     const user = await prisma.user.findUnique({

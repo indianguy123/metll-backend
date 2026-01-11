@@ -4,43 +4,104 @@ const accountSid = process.env.TWILIO_ACCOUNT_SID;
 const authToken = process.env.TWILIO_AUTH_TOKEN;
 const twilioPhoneNumber = process.env.TWILIO_PHONE_NUMBER;
 
+// Fast2SMS API key (free for Indian numbers)
+const fast2smsApiKey = process.env.FAST2SMS_API_KEY;
+
+// SMS Provider: 'twilio', 'fast2sms', or 'dev' (console only)
+const smsProvider = process.env.SMS_PROVIDER || 'dev';
+
 // Initialize Twilio client
-const client = accountSid && authToken 
+const twilioClient = accountSid && authToken 
   ? twilio(accountSid, authToken)
   : null;
 
 /**
- * Send OTP via SMS using Twilio
+ * Send OTP via Fast2SMS (FREE for Indian numbers)
+ * Sign up at: https://www.fast2sms.com/
+ */
+const sendViaFast2SMS = async (phoneNumber: string, otp: string): Promise<void> => {
+  if (!fast2smsApiKey) {
+    throw new Error('Fast2SMS API key not configured. Set FAST2SMS_API_KEY in .env');
+  }
+
+  // Remove country code (+91) for Fast2SMS - it only works with 10-digit Indian numbers
+  const phone = phoneNumber.replace(/^\+91/, '');
+  
+  const response = await fetch('https://www.fast2sms.com/dev/bulkV2', {
+    method: 'POST',
+    headers: {
+      'authorization': fast2smsApiKey,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      route: 'otp',
+      variables_values: otp,
+      numbers: phone,
+    }),
+  });
+
+  const data = await response.json();
+  
+  if (!data.return) {
+    console.error('Fast2SMS error:', data);
+    throw new Error(data.message || 'Failed to send SMS via Fast2SMS');
+  }
+  
+  console.log(`✅ OTP sent to ${phoneNumber} via Fast2SMS`);
+};
+
+/**
+ * Send OTP via Twilio (paid)
+ */
+const sendViaTwilio = async (phoneNumber: string, otp: string): Promise<void> => {
+  if (!twilioClient || !twilioPhoneNumber) {
+    throw new Error('Twilio not configured. Set TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, and TWILIO_PHONE_NUMBER in .env');
+  }
+
+  await twilioClient.messages.create({
+    body: `Your Metll verification code is: ${otp}. This code will expire in 10 minutes.`,
+    from: twilioPhoneNumber,
+    to: phoneNumber,
+  });
+  
+  console.log(`✅ OTP sent to ${phoneNumber} via Twilio`);
+};
+
+/**
+ * Send OTP via SMS
  * 
- * Security best practices:
- * - Rate limiting is handled at route level
- * - OTP expiration is handled at database level
- * - Phone numbers are validated before sending
+ * Supports multiple providers:
+ * - 'dev': Development mode - logs OTP to console (FREE)
+ * - 'fast2sms': Fast2SMS for Indian numbers (FREE tier available)
+ * - 'twilio': Twilio (paid)
+ * 
+ * Set SMS_PROVIDER in .env to choose provider
  */
 export const sendOTPSMS = async (phoneNumber: string, otp: string): Promise<void> => {
-  if (!client) {
-    // In development, log the OTP instead of sending SMS
-    if (process.env.NODE_ENV === 'development') {
-      console.log(`📱 SMS OTP for ${phoneNumber}: ${otp}`);
-      console.log('⚠️  Twilio not configured. Set TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, and TWILIO_PHONE_NUMBER in .env');
-      return;
-    }
-    throw new Error('SMS service not configured');
-  }
-
-  if (!twilioPhoneNumber) {
-    throw new Error('Twilio phone number not configured');
-  }
-
-  try {
-    await client.messages.create({
-      body: `Your Metll verification code is: ${otp}. This code will expire in 10 minutes.`,
-      from: twilioPhoneNumber,
-      to: phoneNumber,
-    });
-  } catch (error: any) {
-    console.error('Twilio SMS error:', error);
-    throw new Error(`Failed to send SMS: ${error.message}`);
+  console.log(`📱 Sending OTP to ${phoneNumber} using provider: ${smsProvider}`);
+  
+  switch (smsProvider) {
+    case 'fast2sms':
+      await sendViaFast2SMS(phoneNumber, otp);
+      break;
+      
+    case 'twilio':
+      await sendViaTwilio(phoneNumber, otp);
+      break;
+      
+    case 'dev':
+    default:
+      // Development mode - just log the OTP
+      console.log('');
+      console.log('╔════════════════════════════════════════╗');
+      console.log('║         📱 DEVELOPMENT OTP             ║');
+      console.log('╠════════════════════════════════════════╣');
+      console.log(`║  Phone: ${phoneNumber.padEnd(26)}  ║`);
+      console.log(`║  OTP:   ${otp.padEnd(26)}  ║`);
+      console.log('╚════════════════════════════════════════╝');
+      console.log('');
+      console.log('💡 To send real SMS, set SMS_PROVIDER=fast2sms or SMS_PROVIDER=twilio in .env');
+      break;
   }
 };
 
