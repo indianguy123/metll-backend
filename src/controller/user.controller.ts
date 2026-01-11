@@ -1,5 +1,6 @@
 import { Response } from 'express';
 import prisma from '../config/database.config';
+import { Prisma } from '@prisma/client';
 import { AuthRequest } from '../types';
 import {
   uploadImageToCloudinary,
@@ -208,10 +209,11 @@ export const uploadAdditionalPhotos = async (req: AuthRequest, res: Response): P
     for (const file of files) {
       const result = await uploadImageToCloudinary(
         file.buffer,
-        `metll/users/${userId}/additional`
+        userId,
+        'additional'
       );
-      uploadedPhotos.push(result.secure_url);
-      uploadedPhotoIds.push(result.public_id);
+      uploadedPhotos.push(result.url);
+      uploadedPhotoIds.push(result.publicId);
     }
 
     // Update user
@@ -362,15 +364,16 @@ export const uploadVerificationVideo = async (req: AuthRequest, res: Response): 
     // Upload to Cloudinary
     const result = await uploadVideoToCloudinary(
       file.buffer,
-      `metll/users/${userId}/verification`
+      userId,
+      'verification'
     );
 
     // Update user
     const updatedUser = await prisma.user.update({
       where: { id: userId },
       data: {
-        verificationVideo: result.secure_url,
-        verificationVideoId: result.public_id,
+        verificationVideo: result.url,
+        verificationVideoId: result.publicId,
       },
       select: {
         id: true,
@@ -420,7 +423,7 @@ export const updateSituationResponses = async (req: AuthRequest, res: Response):
     }
 
     // Validate response structure
-    const validatedResponses: SituationResponse[] = responses.map((r: any) => ({
+    const validatedResponses = responses.map((r: any) => ({
       questionId: parseInt(r.questionId),
       answer: String(r.answer),
       answeredAt: r.answeredAt || new Date().toISOString(),
@@ -430,7 +433,7 @@ export const updateSituationResponses = async (req: AuthRequest, res: Response):
     const updatedUser = await prisma.user.update({
       where: { id: userId },
       data: {
-        situationResponses: validatedResponses,
+        situationResponses: validatedResponses as Prisma.InputJsonValue,
       },
       select: {
         id: true,
@@ -535,11 +538,11 @@ export const updateSchool = async (req: AuthRequest, res: Response): Promise<voi
       return;
     }
 
-    const schoolData: SchoolInfo = req.body;
+    const schoolData = req.body as SchoolInfo;
 
     const updatedUser = await prisma.user.update({
       where: { id: userId },
-      data: { school: schoolData },
+      data: { school: schoolData as Prisma.InputJsonValue },
       select: { id: true, school: true },
     });
 
@@ -574,11 +577,11 @@ export const updateCollege = async (req: AuthRequest, res: Response): Promise<vo
       return;
     }
 
-    const collegeData: CollegeInfo = req.body;
+    const collegeData = req.body as CollegeInfo;
 
     const updatedUser = await prisma.user.update({
       where: { id: userId },
-      data: { college: collegeData },
+      data: { college: collegeData as Prisma.InputJsonValue },
       select: { id: true, college: true },
     });
 
@@ -613,11 +616,11 @@ export const updateOffice = async (req: AuthRequest, res: Response): Promise<voi
       return;
     }
 
-    const officeData: OfficeInfo = req.body;
+    const officeData = req.body as OfficeInfo;
 
     const updatedUser = await prisma.user.update({
       where: { id: userId },
-      data: { office: officeData },
+      data: { office: officeData as Prisma.InputJsonValue },
       select: { id: true, office: true },
     });
 
@@ -652,11 +655,11 @@ export const updateHomeLocation = async (req: AuthRequest, res: Response): Promi
       return;
     }
 
-    const homeLocationData: HomeLocation = req.body;
+    const homeLocationData = req.body as HomeLocation;
 
     const updatedUser = await prisma.user.update({
       where: { id: userId },
-      data: { homeLocation: homeLocationData },
+      data: { homeLocation: homeLocationData as Prisma.InputJsonValue },
       select: { id: true, homeLocation: true },
     });
 
