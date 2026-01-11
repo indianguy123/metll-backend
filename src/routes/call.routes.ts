@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { authMiddleware } from '../middleware/auth.middleware';
+import { protect as authMiddleware } from '../middleware/auth.middleware';
 import { initiateCall, endCall, answerCall, declineCall } from '../controller/call.controller';
 
 const router = Router();
