@@ -162,8 +162,8 @@ export const initializeSocketIO = (httpServer: HTTPServer): SocketIOServer => {
                     matchId,
                 };
 
-                // Broadcast to chat room
-                io.to(`chat:${match.chatRoom.id}`).emit('new_message', messageData);
+                // Broadcast to chat room (exclude sender to prevent duplicate)
+                socket.to(`chat:${match.chatRoom.id}`).emit('new_message', messageData);
 
                 // Send notification to other user if not in chat room
                 const otherUserId = match.user1Id === userId ? match.user2Id : match.user1Id;
