@@ -6,6 +6,7 @@ import confessionRoutes from './routes/confession.routes';
 import verificationRoutes from './routes/verification.routes';
 import swipeRoutes from './routes/swipe.routes';
 import chatRoutes from './routes/chat.routes';
+import userRoutes from './routes/user.routes';
 
 dotenv.config();
 
@@ -31,6 +32,7 @@ app.use('/api/confessions', confessionRoutes);
 app.use('/api/verification', verificationRoutes);
 app.use('/api/swipe', swipeRoutes);
 app.use('/api/chat', chatRoutes);
+app.use('/api/user', userRoutes);
 
 // 404 handler
 app.use((_req, res) => {

@@ -10,6 +10,7 @@ datasource db {
 model User {
   id            Int       @id @default(autoincrement())
   phoneNumber   String    @unique
+  email         String?
   password      String
   name          String?
   bio           String?
@@ -21,6 +22,14 @@ model User {
   imagePublicIds String[] @default([])
   isVerified    Boolean   @default(false)
   
+  // Additional Photos (Cloudinary URLs)
+  additionalPhotos      String[]  @default([])
+  additionalPhotoIds    String[]  @default([])  // Cloudinary public IDs
+  
+  // Verification Video
+  verificationVideo     String?   // Cloudinary URL
+  verificationVideoId   String?   // Cloudinary public ID
+  
   // Face Verification Fields
   profilePhoto        String?   // Primary profile photo URL (Cloudinary)
   profilePhotoPublicId String?  // Cloudinary public ID for profile photo
@@ -29,6 +38,15 @@ model User {
   verificationScore   Float?    // 0-100 similarity score from face comparison
   verificationDate    DateTime?
   livenessSessionId   String?   // Session ID for liveness verification
+  
+  // Location/Background Info (stored as JSON)
+  school        Json?     // { name, location, city, state, class, section }
+  college       Json?     // { name, department, location }
+  office        Json?     // { name, department, designation, location }
+  homeLocation  Json?     // { current: { address, city, state }, past: { address, city, state } }
+  
+  // Personality Questions (stored as JSON array)
+  situationResponses Json?  // [{ questionId, answer, answeredAt }]
   
   otp           String?
   otpExpiresAt  DateTime?
