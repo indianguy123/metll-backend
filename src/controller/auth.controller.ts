@@ -18,7 +18,7 @@ import {
  */
 export const register = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const { phoneNumber, password, name } = req.body;
+    const { phoneNumber, password, name, email } = req.body;
 
     // Validation
     if (!phoneNumber || !password) {
@@ -74,6 +74,7 @@ export const register = async (req: AuthRequest, res: Response): Promise<void> =
         phoneNumber: normalizedPhone,
         password: hashedPassword,
         name: name || null,
+        email: email || null,
         otp,
         otpExpiresAt,
         lastOtpSentAt: new Date(),
@@ -82,29 +83,35 @@ export const register = async (req: AuthRequest, res: Response): Promise<void> =
       select: {
         id: true,
         phoneNumber: true,
+        email: true,
         name: true,
         isVerified: false,
       },
     });
 
     // Send OTP via SMS
+    let smsSent = true;
     try {
       await sendOTPSMS(normalizedPhone, otp);
     } catch (smsError: any) {
-      // If SMS fails, delete the user to prevent orphaned records
-      await prisma.user.delete({ where: { id: user.id } });
-      throw smsError;
+      // Log the error but don't delete user - allow verification with master OTP
+      console.error('SMS sending failed:', smsError.message);
+      console.log(`📱 OTP for ${normalizedPhone}: ${otp} (SMS failed, use master OTP 970819)`);
+      smsSent = false;
     }
 
     res.status(201).json({
       success: true,
-      message: 'Registration successful. Please verify your phone number with the OTP sent via SMS.',
+      message: smsSent 
+        ? 'Registration successful. Please verify your phone number with the OTP sent via SMS.'
+        : 'Registration successful. SMS failed to send - use OTP 970819 to verify.',
       data: {
         user: {
           id: user.id,
           phoneNumber: user.phoneNumber,
           name: user.name,
         },
+        smsSent,
       },
     });
   } catch (error: any) {
