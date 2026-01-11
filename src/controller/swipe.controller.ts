@@ -249,12 +249,24 @@ export const getSwipeProfiles = async (req: AuthRequest, res: Response): Promise
         const excludeIds = [userId, ...swipedIds];
         console.log(`[getSwipeProfiles] Excluding IDs:`, excludeIds);
 
+        // TEMPORARY: For debugging - get ALL users first to see what's in DB
+        const allUsersDebug = await prisma.user.findMany({
+            select: {
+                id: true,
+                name: true,
+                phoneNumber: true,
+                isVerified: true,
+                isOnboarded: true,
+            },
+        });
+        console.log(`[getSwipeProfiles] DEBUG - All users in DB:`, JSON.stringify(allUsersDebug, null, 2));
+
         // Get profiles to show (excluding self and already swiped)
         // Removed isVerified requirement to show all profiles in database
         const profiles = await prisma.user.findMany({
             where: {
                 id: {
-                    notIn: excludeIds,
+                    notIn: excludeIds.length > 0 ? excludeIds : [userId], // Handle empty array case
                 },
             },
             select: {
@@ -285,10 +297,25 @@ export const getSwipeProfiles = async (req: AuthRequest, res: Response): Promise
             console.log(`  - Only one user in database (current user)`);
         }
 
-        res.status(200).json({
+        // Include debug info in development mode
+        const response: any = {
             success: true,
             data: profiles,
-        });
+        };
+
+        if (process.env.NODE_ENV === 'development') {
+            response.debug = {
+                userId,
+                totalUsers,
+                swipedCount: swipedIds.length,
+                swipedIds,
+                allUserIds: allIds,
+                excludeIds,
+                foundCount: profiles.length,
+            };
+        }
+
+        res.status(200).json(response);
     } catch (error: any) {
         console.error('Get swipe profiles error:', error);
         res.status(500).json({
