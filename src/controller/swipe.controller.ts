@@ -237,11 +237,8 @@ export const getSwipeProfiles = async (req: AuthRequest, res: Response): Promise
                 id: {
                     notIn: [userId, ...swipedIds],
                 },
-                // Only show users with at least one image
-                OR: [
-                    { images: { isEmpty: false } },
-                    { profilePhoto: { not: null } },
-                ],
+                // Only show verified users (removed image requirement for testing)
+                isVerified: true,
             },
             select: {
                 id: true,
@@ -251,9 +248,13 @@ export const getSwipeProfiles = async (req: AuthRequest, res: Response): Promise
                 gender: true,
                 images: true,
                 profilePhoto: true,
+                additionalPhotos: true,
                 isVerified: true,
                 latitude: true,
                 longitude: true,
+                school: true,
+                college: true,
+                office: true,
             },
             take: 20, // Limit to 20 profiles at a time
         });

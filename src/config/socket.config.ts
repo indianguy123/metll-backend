@@ -8,7 +8,7 @@ interface AuthenticatedSocket extends Socket {
 }
 
 interface JWTPayload {
-    id: number;
+    userId: number;
     phoneNumber: string;
 }
 
@@ -42,7 +42,7 @@ export const initializeSocketIO = (httpServer: HTTPServer): SocketIOServer => {
 
             // Verify user exists
             const user = await prisma.user.findUnique({
-                where: { id: decoded.id },
+                where: { id: decoded.userId },
                 select: { id: true },
             });
 
