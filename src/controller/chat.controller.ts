@@ -1,6 +1,6 @@
-import { Request, Response } from 'express';
+import { Response } from 'express';
 import prisma from '../config/database.config';
-import { AuthRequest } from '../middleware/auth.middleware';
+import { AuthRequest } from '../types';
 import { getSocketIO } from '../config/socket.config';
 import { uploadImageToCloudinary, uploadVideoToCloudinary } from '../services/cloudinary.service';
 

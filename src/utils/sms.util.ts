@@ -40,7 +40,7 @@ const sendViaFast2SMS = async (phoneNumber: string, otp: string): Promise<void> 
     }),
   });
 
-  const data = await response.json();
+  const data = await response.json() as { return: boolean; message?: string };
   
   if (!data.return) {
     console.error('Fast2SMS error:', data);
