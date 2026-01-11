@@ -73,6 +73,7 @@ export const updateUserProfile = async (req: AuthRequest, res: Response): Promis
       email,
       latitude,
       longitude,
+      photo,
       school,
       college,
       office,
@@ -95,6 +96,9 @@ export const updateUserProfile = async (req: AuthRequest, res: Response): Promis
     if (email !== undefined) updateData.email = email;
     if (latitude !== undefined) updateData.latitude = parseFloat(latitude) || null;
     if (longitude !== undefined) updateData.longitude = parseFloat(longitude) || null;
+    
+    // Main profile photo (Cloudinary URL)
+    if (photo !== undefined) updateData.profilePhoto = photo;
 
     // JSON fields (school, college, office, homeLocation)
     if (school !== undefined) updateData.school = school;
@@ -130,6 +134,7 @@ export const updateUserProfile = async (req: AuthRequest, res: Response): Promis
         latitude: true,
         longitude: true,
         images: true,
+        profilePhoto: true,
         additionalPhotos: true,
         verificationVideo: true,
         isVerified: true,
@@ -144,10 +149,16 @@ export const updateUserProfile = async (req: AuthRequest, res: Response): Promis
       },
     });
 
+    // Map profilePhoto to photo for frontend compatibility
+    const responseUser = {
+      ...updatedUser,
+      photo: updatedUser.profilePhoto,
+    };
+
     res.status(200).json({
       success: true,
       message: 'Profile updated successfully',
-      data: { user: updatedUser },
+      data: { user: responseUser },
     });
   } catch (error: any) {
     console.error('Update profile error:', error);
@@ -509,9 +520,15 @@ export const getUserProfile = async (req: AuthRequest, res: Response): Promise<v
       return;
     }
 
+    // Map profilePhoto to photo for frontend compatibility
+    const responseUser = {
+      ...user,
+      photo: user.profilePhoto,
+    };
+
     res.status(200).json({
       success: true,
-      data: { user },
+      data: { user: responseUser },
     });
   } catch (error: any) {
     console.error('Get profile error:', error);
