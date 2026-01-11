@@ -193,8 +193,8 @@ export const verifyOTP = async (req: AuthRequest, res: Response): Promise<void> 
       return;
     }
 
-    // Verify user
-    await prisma.user.update({
+    // Verify user and get updated data with all fields
+    const updatedUser = await prisma.user.update({
       where: { id: user.id },
       data: {
         isVerified: true,
@@ -202,24 +202,70 @@ export const verifyOTP = async (req: AuthRequest, res: Response): Promise<void> 
         otpExpiresAt: null,
         otpAttempts: 0,
       },
+      select: {
+        id: true,
+        phoneNumber: true,
+        email: true,
+        name: true,
+        bio: true,
+        age: true,
+        gender: true,
+        latitude: true,
+        longitude: true,
+        images: true,
+        profilePhoto: true,
+        additionalPhotos: true,
+        verificationVideo: true,
+        isVerified: true,
+        verificationStatus: true,
+        school: true,
+        college: true,
+        office: true,
+        homeLocation: true,
+        situationResponses: true,
+        createdAt: true,
+        updatedAt: true,
+      },
     });
 
     // Generate token
     const token = generateToken({
-      userId: user.id,
-      phoneNumber: user.phoneNumber,
+      userId: updatedUser.id,
+      phoneNumber: updatedUser.phoneNumber,
     });
+
+    // Build user response (map profilePhoto to photo)
+    const userResponse = {
+      id: updatedUser.id,
+      phoneNumber: updatedUser.phoneNumber,
+      email: updatedUser.email,
+      name: updatedUser.name,
+      bio: updatedUser.bio,
+      age: updatedUser.age,
+      gender: updatedUser.gender,
+      latitude: updatedUser.latitude,
+      longitude: updatedUser.longitude,
+      images: updatedUser.images,
+      photo: updatedUser.profilePhoto,
+      additionalPhotos: updatedUser.additionalPhotos,
+      verificationVideo: updatedUser.verificationVideo,
+      isVerified: updatedUser.isVerified,
+      verificationStatus: updatedUser.verificationStatus,
+      school: updatedUser.school,
+      college: updatedUser.college,
+      office: updatedUser.office,
+      homeLocation: updatedUser.homeLocation,
+      situationResponses: updatedUser.situationResponses,
+      createdAt: updatedUser.createdAt,
+      updatedAt: updatedUser.updatedAt,
+    };
 
     res.status(200).json({
       success: true,
       message: 'Account verified successfully',
       data: {
         token,
-        user: {
-          id: user.id,
-          phoneNumber: user.phoneNumber,
-          name: user.name,
-        },
+        user: userResponse,
       },
     });
   } catch (error: any) {
@@ -253,9 +299,34 @@ export const login = async (req: AuthRequest, res: Response): Promise<void> => {
     // Normalize phone number
     const normalizedPhone = normalizePhoneNumber(phoneNumber);
 
-    // Find user
+    // Find user with all fields
     const user = await prisma.user.findUnique({
       where: { phoneNumber: normalizedPhone },
+      select: {
+        id: true,
+        phoneNumber: true,
+        email: true,
+        password: true,
+        name: true,
+        bio: true,
+        age: true,
+        gender: true,
+        latitude: true,
+        longitude: true,
+        images: true,
+        profilePhoto: true,
+        additionalPhotos: true,
+        verificationVideo: true,
+        isVerified: true,
+        verificationStatus: true,
+        school: true,
+        college: true,
+        office: true,
+        homeLocation: true,
+        situationResponses: true,
+        createdAt: true,
+        updatedAt: true,
+      },
     });
 
     if (!user) {
@@ -293,20 +364,38 @@ export const login = async (req: AuthRequest, res: Response): Promise<void> => {
       phoneNumber: user.phoneNumber,
     });
 
+    // Build user response (exclude password, map profilePhoto to photo)
+    const userResponse = {
+      id: user.id,
+      phoneNumber: user.phoneNumber,
+      email: user.email,
+      name: user.name,
+      bio: user.bio,
+      age: user.age,
+      gender: user.gender,
+      latitude: user.latitude,
+      longitude: user.longitude,
+      images: user.images,
+      photo: user.profilePhoto,
+      additionalPhotos: user.additionalPhotos,
+      verificationVideo: user.verificationVideo,
+      isVerified: user.isVerified,
+      verificationStatus: user.verificationStatus,
+      school: user.school,
+      college: user.college,
+      office: user.office,
+      homeLocation: user.homeLocation,
+      situationResponses: user.situationResponses,
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt,
+    };
+
     res.status(200).json({
       success: true,
       message: 'Login successful',
       data: {
         token,
-        user: {
-          id: user.id,
-          phoneNumber: user.phoneNumber,
-          name: user.name,
-          bio: user.bio,
-          age: user.age,
-          gender: user.gender,
-          images: user.images,
-        },
+        user: userResponse,
       },
     });
   } catch (error: any) {
