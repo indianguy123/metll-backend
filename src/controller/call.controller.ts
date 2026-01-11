@@ -129,12 +129,14 @@ export const initiateCall = async (req: AuthRequest, res: Response): Promise<voi
         // Emit socket event to notify receiver of incoming call
         const io = getSocketIO();
         if (io) {
+            const caller = match.user1Id === userId ? match.user1 : match.user2;
             io.to(`user:${receiverId}`).emit('incoming_call', {
                 callId: call.id,
+                matchId,
                 channelName,
                 callerId,
-                callerName: match.user1Id === userId ? match.user1.name : match.user2.name,
-                callerPhoto: match.user1Id === userId ? match.user1.profilePhoto : match.user2.profilePhoto,
+                callerName: caller.name,
+                callerPhoto: caller.profilePhoto,
                 type,
                 token: receiverToken,
                 appId: AGORA_APP_ID,
