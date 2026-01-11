@@ -493,6 +493,44 @@ export const getMatchById = async (req: AuthRequest, res: Response): Promise<voi
 };
 
 /**
+ * Reset all swipes for the current user (delete all swipe records)
+ * DELETE /api/swipe/reset
+ */
+export const resetSwipes = async (req: AuthRequest, res: Response): Promise<void> => {
+    try {
+        const userId = req.user?.id;
+        if (!userId) {
+            res.status(401).json({ success: false, message: 'Unauthorized' });
+            return;
+        }
+
+        // Delete all swipe records where this user is the swiper
+        const deletedCount = await prisma.swipe.deleteMany({
+            where: {
+                swiperId: userId,
+            },
+        });
+
+        console.log(`[resetSwipes] Deleted ${deletedCount.count} swipe records for user ${userId}`);
+
+        res.status(200).json({
+            success: true,
+            message: 'All swipes reset successfully',
+            data: {
+                deletedCount: deletedCount.count,
+            },
+        });
+    } catch (error: any) {
+        console.error('Reset swipes error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to reset swipes',
+            error: process.env.NODE_ENV === 'development' ? error.message : undefined,
+        });
+    }
+};
+
+/**
  * Unmatch a user
  * DELETE /api/swipe/matches/:matchId
  */

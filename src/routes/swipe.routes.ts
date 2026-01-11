@@ -5,6 +5,7 @@ import {
     getMatches,
     getMatchById,
     unmatchUser,
+    resetSwipes,
 } from '../controller/swipe.controller';
 import { protect } from '../middleware/auth.middleware';
 
@@ -32,5 +33,9 @@ router.get('/matches/:matchId', getMatchById);
 // Unmatch a user
 // DELETE /api/swipe/matches/:matchId
 router.delete('/matches/:matchId', unmatchUser);
+
+// Reset all swipes for current user
+// DELETE /api/swipe/reset
+router.delete('/reset', resetSwipes);
 
 export default router;
