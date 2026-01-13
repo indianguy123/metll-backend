@@ -60,14 +60,15 @@ const THIS_OR_THAT_QUESTIONS = [
     },
 ];
 
-const DEEP_QUESTIONS = [
-    "What's a quality in someone that instantly draws you to them? 💫",
-    "What makes you feel most authentically yourself? 🌟",
-    "What's something you value deeply in relationships? ❤️",
-    "How do you recharge when life gets overwhelming? 🧘",
-    "What's a lesson you've learned that changed how you see things? 📚",
-    "What kind of energy do you bring to the people around you? ⚡",
-];
+// DEEP_QUESTIONS - Reserved for future use in deeper conversation stages
+// const DEEP_QUESTIONS = [
+//     "What's a quality in someone that instantly draws you to them? 💫",
+//     "What makes you feel most authentically yourself? 🌟",
+//     "What's something you value deeply in relationships? ❤️",
+//     "How do you recharge when life gets overwhelming? 🧘",
+//     "What's a lesson you've learned that changed how you see things? 📚",
+//     "What kind of energy do you bring to the people around you? ⚡",
+// ];
 
 // NEW MINI-GAMES! 🎮
 
@@ -159,19 +160,19 @@ const TWO_TRUTHS_PROMPTS = [
     "Share 2 truths and 1 lie about your childhood! 👶",
 ];
 
-// Compatibility Quiz
-const COMPATIBILITY_QUESTIONS = [
-    {
-        question: "Pick your ideal date night:",
-        options: ["Cozy movie night in 🎬", "Adventure outdoors 🏕️", "Fancy dinner out 🍷", "Game night with friends 🎲"],
-        gameType: "compatibility"
-    },
-    {
-        question: "Your love language is:",
-        options: ["Words 💌", "Touch 🤗", "Gifts 🎁", "Quality time ⏰", "Acts of service 🛠️"],
-        gameType: "compatibility"
-    },
-];
+// Compatibility Quiz - Reserved for future use
+// const COMPATIBILITY_QUESTIONS = [
+//     {
+//         question: "Pick your ideal date night:",
+//         options: ["Cozy movie night in 🎬", "Adventure outdoors 🏕️", "Fancy dinner out 🍷", "Game night with friends 🎲"],
+//         gameType: "compatibility"
+//     },
+//     {
+//         question: "Your love language is:",
+//         options: ["Words 💌", "Touch 🤗", "Gifts 🎁", "Quality time ⏰", "Acts of service 🛠️"],
+//         gameType: "compatibility"
+//     },
+// ];
 
 /**
  * Get or create AI host session for a match
@@ -753,11 +754,11 @@ async function processNextHostStep(sessionId: number, matchId: number, chatRoomI
                     }, 2000); // 2 second delay
                 } else {
                     // No more questions, move to STAGE 3
-                    await moveToStage3(sessionId, chatRoomId, matchId);
+                    await moveToStage3(sessionId, chatRoomId);
                 }
             } else {
                 // Completed all rounds, move to STAGE 3 (Emoji Story)
-                await moveToStage3(sessionId, chatRoomId, matchId);
+                await moveToStage3(sessionId, chatRoomId);
             }
         }
     } else if (stage === 'STAGE_3') {
@@ -950,7 +951,7 @@ async function processNextHostStep(sessionId: number, matchId: number, chatRoomI
 /**
  * Move to STAGE 3: Emoji Story Game! 🎬
  */
-async function moveToStage3(sessionId: number, chatRoomId: number, matchId: number): Promise<void> {
+async function moveToStage3(sessionId: number, chatRoomId: number): Promise<void> {
     await prisma.chatHostSession.update({
         where: { id: sessionId },
         data: { currentStage: 'STAGE_3', stageData: { gameRounds: 0, answers: {} } },
