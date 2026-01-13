@@ -2,6 +2,7 @@ import express, { Application } from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import authRoutes from './routes/auth.routes';
+import referralRoutes from './routes/referral.routes';
 import confessionRoutes from './routes/confession.routes';
 import verificationRoutes from './routes/verification.routes';
 import swipeRoutes from './routes/swipe.routes';
@@ -30,6 +31,7 @@ app.get('/health', (_req, res) => {
 
 // API Routes
 app.use('/api/auth', authRoutes);
+app.use('/api/referrals', referralRoutes); // Add referral routes
 app.use('/api/confessions', confessionRoutes);
 app.use('/api/verification', verificationRoutes);
 app.use('/api/swipe', swipeRoutes);

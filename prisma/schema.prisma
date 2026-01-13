@@ -8,47 +8,47 @@ datasource db {
 }
 
 model User {
-  id            Int       @id @default(autoincrement())
-  phoneNumber   String    @unique
-  email         String?
-  password      String
-  name          String?
-  bio           String?
-  age           Int?
-  gender        String?
-  latitude      Float?
-  longitude     Float?
-  images        String[]  @default([])
+  id             Int      @id @default(autoincrement())
+  phoneNumber    String   @unique
+  email          String?
+  password       String
+  name           String?
+  bio            String?
+  age            Int?
+  gender         String?
+  latitude       Float?
+  longitude      Float?
+  images         String[] @default([])
   imagePublicIds String[] @default([])
-  isVerified    Boolean   @default(false)
-  isOnboarded   Boolean   @default(false)  // Set to true after user completes onboarding (uploads verification video)
-  
+  isVerified     Boolean  @default(false)
+  isOnboarded    Boolean  @default(false) // Set to true after user completes onboarding (uploads verification video)
+
   // Additional Photos (Cloudinary URLs)
-  additionalPhotos      String[]  @default([])
-  additionalPhotoIds    String[]  @default([])  // Cloudinary public IDs
-  
+  additionalPhotos   String[] @default([])
+  additionalPhotoIds String[] @default([]) // Cloudinary public IDs
+
   // Verification Video
-  verificationVideo     String?   // Cloudinary URL
-  verificationVideoId   String?   // Cloudinary public ID
-  
+  verificationVideo   String? // Cloudinary URL
+  verificationVideoId String? // Cloudinary public ID
+
   // Face Verification Fields
-  profilePhoto        String?   // Primary profile photo URL (Cloudinary)
-  profilePhotoPublicId String?  // Cloudinary public ID for profile photo
-  faceId              String?   // AWS Rekognition FaceId (for face collection if used)
-  verificationStatus  String?   // 'pending', 'photo_uploaded', 'liveness_pending', 'verified', 'failed'
-  verificationScore   Float?    // 0-100 similarity score from face comparison
-  verificationDate    DateTime?
-  livenessSessionId   String?   // Session ID for liveness verification
-  
+  profilePhoto         String? // Primary profile photo URL (Cloudinary)
+  profilePhotoPublicId String? // Cloudinary public ID for profile photo
+  faceId               String? // AWS Rekognition FaceId (for face collection if used)
+  verificationStatus   String? // 'pending', 'photo_uploaded', 'liveness_pending', 'verified', 'failed'
+  verificationScore    Float? // 0-100 similarity score from face comparison
+  verificationDate     DateTime?
+  livenessSessionId    String? // Session ID for liveness verification
+
   // Location/Background Info (stored as JSON)
-  school        Json?     // { name, location, city, state, class, section }
-  college       Json?     // { name, department, location }
-  office        Json?     // { name, department, designation, location }
-  homeLocation  Json?     // { current: { address, city, state }, past: { address, city, state } }
-  
+  school       Json? // { name, location, city, state, class, section }
+  college      Json? // { name, department, location }
+  office       Json? // { name, department, designation, location }
+  homeLocation Json? // { current: { address, city, state }, past: { address, city, state } }
+
   // Personality Questions (stored as JSON array)
-  situationResponses Json?  // [{ questionId, answer, answeredAt }]
-  
+  situationResponses Json? // [{ questionId, answer, answeredAt }]
+
   otp           String?
   otpExpiresAt  DateTime?
   otpAttempts   Int       @default(0)
@@ -56,57 +56,73 @@ model User {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
-  confessions   Confession[]
-  matchesAsUser1 Match[]   @relation("User1Matches")
-  matchesAsUser2 Match[]   @relation("User2Matches")
-  
+  // Referral System
+  referralCode String @unique @default(cuid()) // Unique code for this user
+  referredById Int? // Who referred this user
+  referredBy   User?  @relation("Referrals", fields: [referredById], references: [id])
+  referrals    User[] @relation("Referrals") // Users this user referred
+
+  totalReferrals Int @default(0) // Count of successful referrals
+  rewardsEarned  Int @default(0) // Number of coffee dates earned
+  rewardsUsed    Int @default(0) // Number of coffee dates used
+
+  referralStatus String @default("active") // "active", "suspended"
+
+  rewards         Reward[]   @relation("UserRewards")
+  referralRecords Referral[] @relation("ReferrerRecords")
+  referredRecords Referral[] @relation("ReferredUserRecords")
+
+  confessions    Confession[]
+  matchesAsUser1 Match[]      @relation("User1Matches")
+  matchesAsUser2 Match[]      @relation("User2Matches")
+
   // Swipe relations
-  swipesMade     Swipe[]   @relation("SwipesMade")
-  swipesReceived Swipe[]   @relation("SwipesReceived")
-  
+  swipesMade     Swipe[] @relation("SwipesMade")
+  swipesReceived Swipe[] @relation("SwipesReceived")
+
   // Chat relations
-  messages       Message[]
-  
+  messages Message[]
+
   @@index([isVerified])
   @@index([verificationStatus])
 }
 
 model Confession {
-  id          Int       @id @default(autoincrement())
-  userId      Int
+  id           Int      @id @default(autoincrement())
+  userId       Int
   targetUserId Int?
-  description String
-  latitude    Float?
-  longitude   Float?
-  isMatched   Boolean   @default(false)
-  createdAt   DateTime  @default(now())
+  description  String
+  latitude     Float?
+  longitude    Float?
+  isMatched    Boolean  @default(false)
+  createdAt    DateTime @default(now())
 
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model Match {
-  id        Int       @id @default(autoincrement())
+  id        Int      @id @default(autoincrement())
   user1Id   Int
   user2Id   Int
-  matchedAt DateTime  @default(now())
+  matchedAt DateTime @default(now())
 
-  user1     User      @relation("User1Matches", fields: [user1Id], references: [id], onDelete: Cascade)
-  user2     User      @relation("User2Matches", fields: [user2Id], references: [id], onDelete: Cascade)
-  chatRoom  ChatRoom?
+  user1    User      @relation("User1Matches", fields: [user1Id], references: [id], onDelete: Cascade)
+  user2    User      @relation("User2Matches", fields: [user2Id], references: [id], onDelete: Cascade)
+  chatRoom ChatRoom?
 
   @@unique([user1Id, user2Id])
 }
 
 // Track swipe actions (likes/passes)
 model Swipe {
-  id          Int      @id @default(autoincrement())
-  swiperId    Int      // User who swiped
-  swipedId    Int      // User being swiped on
-  direction   String   // 'like' or 'pass'
-  createdAt   DateTime @default(now())
+  id        Int      @id @default(autoincrement())
+  swiperId  Int // User who swiped
+  swipedId  Int // User being swiped on
+  direction String // 'like' or 'pass'
+  createdAt DateTime @default(now())
 
-  swiper      User     @relation("SwipesMade", fields: [swiperId], references: [id], onDelete: Cascade)
-  swiped      User     @relation("SwipesReceived", fields: [swipedId], references: [id], onDelete: Cascade)
+  swiper User @relation("SwipesMade", fields: [swiperId], references: [id], onDelete: Cascade)
+  swiped User @relation("SwipesReceived", fields: [swipedId], references: [id], onDelete: Cascade)
 
   @@unique([swiperId, swipedId])
   @@index([swipedId, direction])
@@ -114,13 +130,13 @@ model Swipe {
 
 // Chat room created when two users match
 model ChatRoom {
-  id        Int       @id @default(autoincrement())
-  matchId   Int       @unique
-  createdAt DateTime  @default(now())
+  id        Int      @id @default(autoincrement())
+  matchId   Int      @unique
+  createdAt DateTime @default(now())
 
-  match     Match     @relation(fields: [matchId], references: [id], onDelete: Cascade)
-  messages  Message[]
-  calls     Call[]
+  match       Match            @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  messages    Message[]
+  calls       Call[]
   hostSession ChatHostSession?
 }
 
@@ -129,14 +145,14 @@ model Message {
   id         Int      @id @default(autoincrement())
   chatRoomId Int
   senderId   Int
-  content    String?   // Make content optional as it might be just an image
+  content    String? // Make content optional as it might be just an image
   type       String   @default("text") // text, image, video, audio
   mediaUrl   String?
   createdAt  DateTime @default(now())
   isRead     Boolean  @default(false)
 
-  chatRoom   ChatRoom @relation(fields: [chatRoomId], references: [id], onDelete: Cascade)
-  sender     User     @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  chatRoom ChatRoom @relation(fields: [chatRoomId], references: [id], onDelete: Cascade)
+  sender   User     @relation(fields: [senderId], references: [id], onDelete: Cascade)
 
   @@index([chatRoomId, createdAt])
 }
@@ -145,17 +161,17 @@ model Message {
 model Call {
   id          Int       @id @default(autoincrement())
   chatRoomId  Int
-  callerId    Int       // User who initiated the call
-  receiverId  Int       // User receiving the call
-  channelName String    @unique  // Agora channel name
+  callerId    Int // User who initiated the call
+  receiverId  Int // User receiving the call
+  channelName String    @unique // Agora channel name
   status      String    @default("pending") // pending, active, ended, missed
-  type        String    @default("voice")   // voice or video
+  type        String    @default("voice") // voice or video
   startedAt   DateTime?
   endedAt     DateTime?
-  duration    Int?      // Call duration in seconds
+  duration    Int? // Call duration in seconds
   createdAt   DateTime  @default(now())
 
-  chatRoom    ChatRoom  @relation(fields: [chatRoomId], references: [id], onDelete: Cascade)
+  chatRoom ChatRoom @relation(fields: [chatRoomId], references: [id], onDelete: Cascade)
 
   @@index([chatRoomId, createdAt])
   @@index([callerId])
@@ -164,21 +180,21 @@ model Call {
 
 // AI Host Session for facilitating conversations between matched users
 model ChatHostSession {
-  id              Int       @id @default(autoincrement())
-  chatRoomId      Int       @unique
-  matchId         Int
-  status          String    @default("pending") // pending, active, completed, declined, exited
-  currentStage    String?   // STAGE_0, STAGE_1, STAGE_2, STAGE_3, STAGE_4, STAGE_5, STAGE_6
-  user1OptIn      Boolean   @default(false)
-  user2OptIn      Boolean   @default(false)
-  stageData       Json?     // Store stage-specific data (answers, game results, etc.)
-  startedAt       DateTime?
-  completedAt     DateTime?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  id           Int       @id @default(autoincrement())
+  chatRoomId   Int       @unique
+  matchId      Int
+  status       String    @default("pending") // pending, active, completed, declined, exited
+  currentStage String? // STAGE_0, STAGE_1, STAGE_2, STAGE_3, STAGE_4, STAGE_5, STAGE_6
+  user1OptIn   Boolean   @default(false)
+  user2OptIn   Boolean   @default(false)
+  stageData    Json? // Store stage-specific data (answers, game results, etc.)
+  startedAt    DateTime?
+  completedAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
-  chatRoom        ChatRoom  @relation(fields: [chatRoomId], references: [id], onDelete: Cascade)
-  messages        ChatHostMessage[]
+  chatRoom ChatRoom          @relation(fields: [chatRoomId], references: [id], onDelete: Cascade)
+  messages ChatHostMessage[]
 
   @@index([matchId])
   @@index([status])
@@ -186,16 +202,47 @@ model ChatHostSession {
 
 // AI Host messages and user responses
 model ChatHostMessage {
-  id              Int       @id @default(autoincrement())
-  sessionId       Int
-  senderType      String    // 'host', 'user1', 'user2'
-  senderId        Int?      // User ID if senderType is user
-  content         String
-  messageType     String    @default("text") // text, question, button, game_prompt
-  metadata        Json?     // Store question options, button data, game type, etc.
-  createdAt       DateTime  @default(now())
+  id          Int      @id @default(autoincrement())
+  sessionId   Int
+  senderType  String // 'host', 'user1', 'user2'
+  senderId    Int? // User ID if senderType is user
+  content     String
+  messageType String   @default("text") // text, question, button, game_prompt
+  metadata    Json? // Store question options, button data, game type, etc.
+  createdAt   DateTime @default(now())
 
-  session         ChatHostSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  session ChatHostSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 
   @@index([sessionId, createdAt])
+}
+
+// Referral System Models
+model Referral {
+  id             Int       @id @default(autoincrement())
+  referrerId     Int // User who shared the code
+  referredUserId Int // User who used the code
+  status         String    @default("pending") // "pending", "completed", "invalid"
+  completedAt    DateTime?
+  createdAt      DateTime  @default(now())
+
+  referrer     User @relation("ReferrerRecords", fields: [referrerId], references: [id])
+  referredUser User @relation("ReferredUserRecords", fields: [referredUserId], references: [id])
+
+  @@unique([referrerId, referredUserId])
+  @@index([referrerId])
+  @@index([status])
+}
+
+model Reward {
+  id        Int       @id @default(autoincrement())
+  userId    Int
+  type      String // "coffee_date"
+  status    String    @default("available") // "available", "used", "expired"
+  earnedAt  DateTime  @default(now())
+  usedAt    DateTime?
+  expiresAt DateTime? // Optional expiration
+
+  user User @relation("UserRewards", fields: [userId], references: [id])
+
+  @@index([userId, status])
 }

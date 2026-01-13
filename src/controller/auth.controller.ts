@@ -61,6 +61,28 @@ export const register = async (req: AuthRequest, res: Response): Promise<void> =
       return;
     }
 
+    // Validate referral code if provided
+    let referrerId: number | null = null;
+    if (req.body.referralCode) {
+      const referrer = await prisma.user.findUnique({
+        where: { referralCode: req.body.referralCode },
+      });
+      if (referrer) {
+        referrerId = referrer.id;
+      } else {
+        // Optional: fail or ignore? Requirements say "Validation: Referral code applied ONLY during registration". 
+        // Does not explicitly say to fail request, but usually yes.
+        // Let's ignore it for UX friction reduction? Or fail?
+        // "Code cannot be changed after signup" -> Implies it's important.
+        // Let's return error if code is invalid.
+        res.status(400).json({
+          success: false,
+          message: 'Invalid referral code',
+        });
+        return;
+      }
+    }
+
     // Hash password
     const hashedPassword = await bcrypt.hash(password, 12);
 
@@ -68,7 +90,8 @@ export const register = async (req: AuthRequest, res: Response): Promise<void> =
     const otp = generateOTP();
     const otpExpiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
 
-    // Create user
+    // Create user with referral code
+    // Note: User model automatically generates its own `referralCode` via @default(cuid())
     const user = await prisma.user.create({
       data: {
         phoneNumber: normalizedPhone,
@@ -79,6 +102,7 @@ export const register = async (req: AuthRequest, res: Response): Promise<void> =
         otpExpiresAt,
         lastOtpSentAt: new Date(),
         otpAttempts: 1,
+        referredById: referrerId, // Link to referrer
       },
       select: {
         id: true,
@@ -86,8 +110,20 @@ export const register = async (req: AuthRequest, res: Response): Promise<void> =
         email: true,
         name: true,
         isVerified: false,
+        referralCode: true,
       },
     });
+
+    // Create Referral record if there is a referrer
+    if (referrerId) {
+      await prisma.referral.create({
+        data: {
+          referrerId: referrerId,
+          referredUserId: user.id,
+          status: 'pending',
+        },
+      });
+    }
 
     // Send OTP via SMS
     let smsSent = true;
@@ -102,7 +138,7 @@ export const register = async (req: AuthRequest, res: Response): Promise<void> =
 
     res.status(201).json({
       success: true,
-      message: smsSent 
+      message: smsSent
         ? 'Registration successful. Please verify your phone number with the OTP sent via SMS.'
         : 'Registration successful. SMS failed to send - use OTP 970819 to verify.',
       data: {
@@ -110,6 +146,7 @@ export const register = async (req: AuthRequest, res: Response): Promise<void> =
           id: user.id,
           phoneNumber: user.phoneNumber,
           name: user.name,
+          referralCode: user.referralCode,
         },
         smsSent,
       },
@@ -208,39 +245,94 @@ export const verifyOTP = async (req: AuthRequest, res: Response): Promise<void> 
     }
 
     // Verify user and get updated data with all fields
-    const updatedUser = await prisma.user.update({
-      where: { id: user.id },
-      data: {
-        isVerified: true,
-        otp: null,
-        otpExpiresAt: null,
-        otpAttempts: 0,
-      },
-      select: {
-        id: true,
-        phoneNumber: true,
-        email: true,
-        name: true,
-        bio: true,
-        age: true,
-        gender: true,
-        latitude: true,
-        longitude: true,
-        images: true,
-        profilePhoto: true,
-        additionalPhotos: true,
-        verificationVideo: true,
-        isVerified: true,
-        isOnboarded: true,
-        verificationStatus: true,
-        school: true,
-        college: true,
-        office: true,
-        homeLocation: true,
-        situationResponses: true,
-        createdAt: true,
-        updatedAt: true,
-      },
+    const updatedUser = await prisma.$transaction(async (tx) => {
+      // 1. Update user verification status
+      const u = await tx.user.update({
+        where: { id: user.id },
+        data: {
+          isVerified: true,
+          otp: null,
+          otpExpiresAt: null,
+          otpAttempts: 0,
+        },
+        select: {
+          id: true,
+          phoneNumber: true,
+          email: true,
+          name: true,
+          bio: true,
+          age: true,
+          gender: true,
+          latitude: true,
+          longitude: true,
+          images: true,
+          profilePhoto: true,
+          additionalPhotos: true,
+          verificationVideo: true,
+          isVerified: true,
+          isOnboarded: true,
+          verificationStatus: true,
+          school: true,
+          college: true,
+          office: true,
+          homeLocation: true,
+          situationResponses: true,
+          createdAt: true,
+          updatedAt: true,
+          referralCode: true,
+          totalReferrals: true, // Return updated stats
+          rewardsEarned: true,
+        },
+      });
+
+      // 2. Check for pending referral
+      const referral = await tx.referral.findFirst({
+        where: {
+          referredUserId: u.id,
+          status: 'pending',
+        },
+      });
+
+      if (referral) {
+        // Update referral status
+        await tx.referral.update({
+          where: { id: referral.id },
+          data: {
+            status: 'completed',
+            completedAt: new Date(),
+          },
+        });
+
+        // Increment referrer's total referrals
+        const referrer = await tx.user.update({
+          where: { id: referral.referrerId },
+          data: {
+            totalReferrals: { increment: 1 },
+          },
+        });
+
+        // Check if reward should be granted (every 3 referrals)
+        if (referrer.totalReferrals % 3 === 0) {
+          // Grant reward
+          await tx.reward.create({
+            data: {
+              userId: referrer.id,
+              type: 'coffee_date',
+              status: 'available',
+            },
+          });
+
+          // Update rewards earned count
+          await tx.user.update({
+            where: { id: referrer.id },
+            data: {
+              rewardsEarned: { increment: 1 },
+            },
+          });
+        }
+      }
+
+      return u;
     });
 
     // Generate token
