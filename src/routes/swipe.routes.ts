@@ -6,6 +6,7 @@ import {
     getMatchById,
     unmatchUser,
     resetSwipes,
+    getWhoLikedMe,
 } from '../controller/swipe.controller';
 import { protect } from '../middleware/auth.middleware';
 
@@ -21,6 +22,10 @@ router.post('/', recordSwipe);
 // Get profiles available to swipe on
 // GET /api/swipe/profiles
 router.get('/profiles', getSwipeProfiles);
+
+// Get users who have liked the current user
+// GET /api/swipe/likes
+router.get('/likes', getWhoLikedMe);
 
 // Get all matches
 // GET /api/swipe/matches

@@ -808,3 +808,106 @@ export const updateHomeLocation = async (req: AuthRequest, res: Response): Promi
   }
 };
 
+/**
+ * Delete user account
+ * DELETE /api/user/account
+ * 
+ * This will:
+ * 1. Delete all user's data (messages, matches, swipes, confessions, etc.)
+ * 2. Delete user's images/videos from Cloudinary
+ * 3. Delete the user record
+ */
+export const deleteAccount = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const userId = req.user?.id;
+
+    if (!userId) {
+      res.status(401).json({
+        success: false,
+        message: 'Unauthorized',
+      });
+      return;
+    }
+
+    // Get user data to delete associated resources
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        profilePhotoPublicId: true,
+        additionalPhotoIds: true,
+        verificationVideoId: true,
+        imagePublicIds: true,
+      },
+    });
+
+    if (!user) {
+      res.status(404).json({
+        success: false,
+        message: 'User not found',
+      });
+      return;
+    }
+
+    // Collect all Cloudinary public IDs to delete
+    const publicIdsToDelete: string[] = [];
+    
+    if (user.profilePhotoPublicId) {
+      publicIdsToDelete.push(user.profilePhotoPublicId);
+    }
+    
+    if (user.additionalPhotoIds && user.additionalPhotoIds.length > 0) {
+      publicIdsToDelete.push(...user.additionalPhotoIds);
+    }
+    
+    if (user.verificationVideoId) {
+      // For videos, we need to delete them separately
+      // Cloudinary deleteImagesFromCloudinary can handle videos too
+      publicIdsToDelete.push(user.verificationVideoId);
+    }
+    
+    if (user.imagePublicIds && user.imagePublicIds.length > 0) {
+      publicIdsToDelete.push(...user.imagePublicIds);
+    }
+
+    // Delete images/videos from Cloudinary
+    if (publicIdsToDelete.length > 0) {
+      try {
+        await deleteImagesFromCloudinary(publicIdsToDelete);
+        console.log(`Deleted ${publicIdsToDelete.length} media files from Cloudinary for user ${userId}`);
+      } catch (cloudinaryError) {
+        console.error('Error deleting media from Cloudinary:', cloudinaryError);
+        // Continue with account deletion even if Cloudinary deletion fails
+      }
+    }
+
+    // Delete user and all related data (cascade deletes will handle related records)
+    // Prisma will automatically delete:
+    // - Messages (via chatRoom relation)
+    // - Matches (via user relations)
+    // - Swipes (via user relations)
+    // - Confessions (via userId)
+    // - ChatRooms (via match relation)
+    // - Calls (via chatRoom relation)
+    // - Referrals (via referrer/referred relations)
+    // - Rewards (via userId)
+    await prisma.user.delete({
+      where: { id: userId },
+    });
+
+    console.log(`Account deleted successfully for user ${userId}`);
+
+    res.status(200).json({
+      success: true,
+      message: 'Account deleted successfully',
+    });
+  } catch (error: any) {
+    console.error('Delete account error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to delete account',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined,
+    });
+  }
+};
+

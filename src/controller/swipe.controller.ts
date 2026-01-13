@@ -213,6 +213,106 @@ export const recordSwipe = async (req: AuthRequest, res: Response): Promise<void
 };
 
 /**
+ * Get users who have liked the current user but haven't been liked back
+ * GET /api/swipe/likes
+ */
+export const getWhoLikedMe = async (req: AuthRequest, res: Response): Promise<void> => {
+    try {
+        const userId = req.user?.id;
+        if (!userId) {
+            res.status(401).json({ success: false, message: 'Unauthorized' });
+            return;
+        }
+
+        // Get all users who have liked the current user
+        const incomingLikes = await prisma.swipe.findMany({
+            where: {
+                swipedId: userId,
+                direction: 'like',
+            },
+            select: { swiperId: true, createdAt: true },
+        });
+
+        if (incomingLikes.length === 0) {
+            res.status(200).json({
+                success: true,
+                data: [],
+            });
+            return;
+        }
+
+        // Get IDs of users the current user has already swiped on
+        const outgoingSwipes = await prisma.swipe.findMany({
+            where: {
+                swiperId: userId,
+            },
+            select: { swipedId: true },
+        });
+        const alreadySwipedIds = outgoingSwipes.map(s => s.swipedId);
+
+        // Filter to get only pending likes (users we haven't swiped on yet)
+        const pendingLikeUserIds = incomingLikes
+            .filter(like => !alreadySwipedIds.includes(like.swiperId))
+            .map(like => like.swiperId);
+
+        if (pendingLikeUserIds.length === 0) {
+            res.status(200).json({
+                success: true,
+                data: [],
+            });
+            return;
+        }
+
+        // Get user details for pending likes
+        const likers = await prisma.user.findMany({
+            where: {
+                id: { in: pendingLikeUserIds },
+            },
+            select: {
+                id: true,
+                name: true,
+                bio: true,
+                age: true,
+                gender: true,
+                images: true,
+                profilePhoto: true,
+                additionalPhotos: true,
+                isVerified: true,
+                school: true,
+                college: true,
+                office: true,
+            },
+        });
+
+        // Add likedAt timestamp
+        const likersWithTimestamp = likers.map(liker => {
+            const likeRecord = incomingLikes.find(l => l.swiperId === liker.id);
+            return {
+                ...liker,
+                likedAt: likeRecord?.createdAt,
+            };
+        });
+
+        // Sort by most recent like first
+        likersWithTimestamp.sort((a, b) =>
+            new Date(b.likedAt || 0).getTime() - new Date(a.likedAt || 0).getTime()
+        );
+
+        res.status(200).json({
+            success: true,
+            data: likersWithTimestamp,
+        });
+    } catch (error: any) {
+        console.error('Get who liked me error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to get likes.',
+            error: process.env.NODE_ENV === 'development' ? error.message : undefined,
+        });
+    }
+};
+
+/**
  * Get profiles available to swipe on
  * GET /api/swipe/profiles
  */

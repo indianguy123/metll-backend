@@ -11,6 +11,7 @@ import {
   updateCollege,
   updateOffice,
   updateHomeLocation,
+  deleteAccount,
 } from '../controller/user.controller';
 import { protect } from '../middleware/auth.middleware';
 import {
@@ -48,5 +49,8 @@ router.put('/school', updateSchool);
 router.put('/college', updateCollege);
 router.put('/office', updateOffice);
 router.put('/home-location', updateHomeLocation);
+
+// Account deletion
+router.delete('/account', deleteAccount);
 
 export default router;
