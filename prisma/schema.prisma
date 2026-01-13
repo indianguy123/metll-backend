@@ -121,6 +121,7 @@ model ChatRoom {
   match     Match     @relation(fields: [matchId], references: [id], onDelete: Cascade)
   messages  Message[]
   calls     Call[]
+  hostSession ChatHostSession?
 }
 
 // Individual chat messages
@@ -159,4 +160,42 @@ model Call {
   @@index([chatRoomId, createdAt])
   @@index([callerId])
   @@index([receiverId])
+}
+
+// AI Host Session for facilitating conversations between matched users
+model ChatHostSession {
+  id              Int       @id @default(autoincrement())
+  chatRoomId      Int       @unique
+  matchId         Int
+  status          String    @default("pending") // pending, active, completed, declined, exited
+  currentStage    String?   // STAGE_0, STAGE_1, STAGE_2, STAGE_3, STAGE_4, STAGE_5, STAGE_6
+  user1OptIn      Boolean   @default(false)
+  user2OptIn      Boolean   @default(false)
+  stageData       Json?     // Store stage-specific data (answers, game results, etc.)
+  startedAt       DateTime?
+  completedAt     DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  chatRoom        ChatRoom  @relation(fields: [chatRoomId], references: [id], onDelete: Cascade)
+  messages        ChatHostMessage[]
+
+  @@index([matchId])
+  @@index([status])
+}
+
+// AI Host messages and user responses
+model ChatHostMessage {
+  id              Int       @id @default(autoincrement())
+  sessionId       Int
+  senderType      String    // 'host', 'user1', 'user2'
+  senderId        Int?      // User ID if senderType is user
+  content         String
+  messageType     String    @default("text") // text, question, button, game_prompt
+  metadata        Json?     // Store question options, button data, game type, etc.
+  createdAt       DateTime  @default(now())
+
+  session         ChatHostSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, createdAt])
 }
