@@ -270,8 +270,8 @@ export const sendVoiceNoteMessage = async (req: AuthRequest, res: Response): Pro
                 content: transcript || null,
                 type: 'voice_note',
                 mediaUrl: audioUrl,
-                duration: duration || 0,
-                waveformData: waveformData ? JSON.stringify(waveformData) : null,
+                duration: duration ? Math.round(parseFloat(String(duration))) : 0,
+                waveformData: waveformData ? (typeof waveformData === 'string' ? waveformData : JSON.stringify(waveformData)) : null,
                 transcript: transcript || null,
             },
             include: {
@@ -283,7 +283,7 @@ export const sendVoiceNoteMessage = async (req: AuthRequest, res: Response): Pro
                     },
                 },
             },
-        });
+        }) as any;
 
         // Broadcast to socket
         const io = getSocketIO();
@@ -394,8 +394,8 @@ export const sendGifMessage = async (req: AuthRequest, res: Response): Promise<v
                 type: 'gif',
                 mediaUrl: gifUrl,
                 gifId: gifId,
-                gifWidth: width || null,
-                gifHeight: height || null,
+                gifWidth: width ? parseInt(String(width)) : null,
+                gifHeight: height ? parseInt(String(height)) : null,
             },
             include: {
                 sender: {
@@ -406,7 +406,7 @@ export const sendGifMessage = async (req: AuthRequest, res: Response): Promise<v
                     },
                 },
             },
-        });
+        }) as any;
 
         // Broadcast to socket
         const io = getSocketIO();
@@ -459,10 +459,18 @@ export const sendGifMessage = async (req: AuthRequest, res: Response): Promise<v
 
     } catch (error: any) {
         console.error('Send GIF message error:', error);
+
+        // Add more specific database error logging
+        if (error.code) {
+            console.error('Prisma Error Code:', error.code);
+            console.error('Prisma Error Meta:', error.meta);
+        }
+
         res.status(500).json({
             success: false,
             message: 'Failed to send GIF message.',
             error: process.env.NODE_ENV === 'development' ? error.message : undefined,
+            code: error.code
         });
     }
 };
