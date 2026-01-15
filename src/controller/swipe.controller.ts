@@ -488,6 +488,9 @@ export const getMatches = async (req: AuthRequest, res: Response): Promise<void>
                 matchedUser,
                 matchedAt: match.matchedAt,
                 chatRoomId: match.chatRoom?.id,
+                coffeeTicket: match.coffeeTicket,
+                coffeeTicketCafe: match.coffeeTicketCafe,
+                coffeeTicketExpiry: match.coffeeTicketExpiry,
                 lastMessage: lastMessage
                     ? {
                         id: lastMessage.id,
