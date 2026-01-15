@@ -384,6 +384,7 @@ export const getSwipeProfiles = async (req: AuthRequest, res: Response): Promise
                 school: true,
                 college: true,
                 office: true,
+                situationResponses: true,
             },
             take: 20, // Limit to 20 profiles at a time
         });
