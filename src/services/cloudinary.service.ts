@@ -112,3 +112,37 @@ export const uploadVideoToCloudinary = async (
     bufferToStream(buffer).pipe(uploadStream);
   });
 };
+
+/**
+ * Upload audio to Cloudinary for voice notes
+ */
+export const uploadAudioToCloudinary = async (
+  buffer: Buffer,
+  userId: number,
+  folder: string = 'voice_notes'
+): Promise<UploadResult & { duration?: number }> => {
+  return new Promise((resolve, reject) => {
+    const uploadStream = cloudinary.uploader.upload_stream(
+      {
+        folder: `metll/users/${userId}/${folder}`,
+        resource_type: 'video', // Cloudinary uses 'video' for audio files
+        format: 'mp3',
+      },
+      (error: UploadApiErrorResponse | undefined, result: UploadApiResponse | undefined) => {
+        if (error) {
+          reject(new Error(`Cloudinary audio upload failed: ${error.message}`));
+        } else if (result) {
+          resolve({
+            url: result.secure_url,
+            publicId: result.public_id,
+            duration: Math.round(result.duration || 0),
+          });
+        } else {
+          reject(new Error('Cloudinary audio upload failed: No result returned'));
+        }
+      }
+    );
+
+    bufferToStream(buffer).pipe(uploadStream);
+  });
+};

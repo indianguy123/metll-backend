@@ -146,8 +146,19 @@ model Message {
   chatRoomId Int
   senderId   Int
   content    String? // Make content optional as it might be just an image
-  type       String   @default("text") // text, image, video, audio
+  type       String   @default("text") // text, image, video, audio, voice_note, gif
   mediaUrl   String?
+  
+  // Voice Note fields
+  duration     Int?    // Duration in seconds for voice notes
+  transcript   String? // Optional transcription for voice notes
+  waveformData String? // JSON string of waveform amplitudes
+  
+  // GIF fields
+  gifId        String? // Giphy GIF ID
+  gifWidth     Int?    // GIF width
+  gifHeight    Int?    // GIF height
+  
   createdAt  DateTime @default(now())
   isRead     Boolean  @default(false)
 

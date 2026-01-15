@@ -10,6 +10,7 @@ import chatRoutes from './routes/chat.routes';
 import userRoutes from './routes/user.routes';
 import callRoutes from './routes/call.routes';
 import hostRoutes from './routes/host.routes';
+import mediaRoutes from './routes/media.routes';
 
 dotenv.config();
 
@@ -39,6 +40,7 @@ app.use('/api/chat', chatRoutes);
 app.use('/api/user', userRoutes);
 app.use('/api/calls', callRoutes);
 app.use('/api/host', hostRoutes);
+app.use('/api/media', mediaRoutes);
 
 // 404 handler
 app.use((_req, res) => {
