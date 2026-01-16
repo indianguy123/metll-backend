@@ -1,6 +1,7 @@
 import { Response } from 'express';
 import prisma from '../config/database.config';
 import { AuthRequest } from '../types';
+import { extractPublicIdFromUrl, deleteResourcesFromCloudinary } from '../services/cloudinary.service';
 
 /**
  * Record a swipe action and check for mutual match
@@ -678,34 +679,74 @@ export const unmatchUser = async (req: AuthRequest, res: Response): Promise<void
             return;
         }
 
-        // Find match
-        const match = await prisma.match.findUnique({
+        // Find match with chat media before deleting
+        const matchToDelete = await prisma.match.findUnique({
             where: { id: matchId },
+            include: {
+                chatRoom: {
+                    include: {
+                        messages: {
+                            where: {
+                                NOT: {
+                                    mediaUrl: null
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         });
 
-        if (!match) {
+        if (!matchToDelete) {
             res.status(404).json({ success: false, message: 'Match not found.' });
             return;
         }
 
         // Verify ownership
-        if (match.user1Id !== userId && match.user2Id !== userId) {
+        if (matchToDelete.user1Id !== userId && matchToDelete.user2Id !== userId) {
             res.status(403).json({ success: false, message: 'Access denied.' });
             return;
         }
 
-        // Delete match (cascades to chatRoom and messages)
+        // 1. Delete Cloudinary Resources for Chat Media
+        if (matchToDelete.chatRoom && matchToDelete.chatRoom.messages.length > 0) {
+            const imagePublicIds: string[] = [];
+            const videoPublicIds: string[] = [];
+
+            matchToDelete.chatRoom.messages.forEach(msg => {
+                if (msg.mediaUrl) {
+                    const publicId = extractPublicIdFromUrl(msg.mediaUrl);
+                    if (publicId) {
+                        if (msg.type === 'image') {
+                            imagePublicIds.push(publicId);
+                        } else if (msg.type === 'video' || msg.type === 'voice_note' || msg.type === 'audio') {
+                            videoPublicIds.push(publicId);
+                        }
+                    }
+                }
+            });
+
+            console.log(`[unmatchUser] Deleting ${imagePublicIds.length} images and ${videoPublicIds.length} videos from Cloudinary for match ${matchId}`);
+
+            if (imagePublicIds.length > 0) {
+                await deleteResourcesFromCloudinary(imagePublicIds, 'image');
+            }
+            if (videoPublicIds.length > 0) {
+                await deleteResourcesFromCloudinary(videoPublicIds, 'video');
+            }
+        }
+
+        // 2. Delete Match from DB (cascades to chatRoom and messages)
         await prisma.match.delete({
             where: { id: matchId },
         });
 
-        // Delete associated swipes to prevent immediate rematch logic issues
-        // and because unmatch usually means "reset" or "block"
+        // 3. Delete associated swipes
         await prisma.swipe.deleteMany({
             where: {
                 OR: [
-                    { swiperId: match.user1Id, swipedId: match.user2Id },
-                    { swiperId: match.user2Id, swipedId: match.user1Id },
+                    { swiperId: matchToDelete.user1Id, swipedId: matchToDelete.user2Id },
+                    { swiperId: matchToDelete.user2Id, swipedId: matchToDelete.user1Id },
                 ],
             },
         });
