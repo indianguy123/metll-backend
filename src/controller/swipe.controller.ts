@@ -346,17 +346,28 @@ export const getSwipeProfiles = async (req: AuthRequest, res: Response): Promise
         console.log(`[getSwipeProfiles] All user IDs in database:`, allIds);
 
         // Get IDs of users this user reported or was reported by (mutual block)
-        const reports = await prisma.report.findMany({
-            where: {
-                OR: [
-                    { reporterId: userId },
-                    { reportedId: userId }
-                ]
-            },
-            select: { reporterId: true, reportedId: true }
-        });
-
-        const blockedUserIds = reports.map(r => r.reporterId === userId ? r.reportedId : r.reporterId);
+        let blockedUserIds: number[] = [];
+        try {
+            // Check if prisma.report exists (defensive check for Prisma client regeneration)
+            if (prisma.report && typeof prisma.report.findMany === 'function') {
+                const reports = await prisma.report.findMany({
+                    where: {
+                        OR: [
+                            { reporterId: userId },
+                            { reportedId: userId }
+                        ]
+                    },
+                    select: { reporterId: true, reportedId: true }
+                });
+                blockedUserIds = reports.map(r => r.reporterId === userId ? r.reportedId : r.reporterId);
+            } else {
+                console.warn('[getSwipeProfiles] prisma.report model not available. Please restart the server after running: npx prisma generate');
+            }
+        } catch (error: any) {
+            console.error('[getSwipeProfiles] Error fetching reports:', error.message);
+            // Continue with empty blockedUserIds array
+            blockedUserIds = [];
+        }
         console.log(`[getSwipeProfiles] Blocked/Reported IDs:`, blockedUserIds);
 
         // Build exclusion list
