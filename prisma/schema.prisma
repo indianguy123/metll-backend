@@ -83,8 +83,27 @@ model User {
   // Chat relations
   messages Message[]
 
+  reportsMade     Report[] @relation("ReportsMade")
+  reportsReceived Report[] @relation("ReportsReceived")
+
   @@index([isVerified])
   @@index([verificationStatus])
+}
+
+model Report {
+  id          Int      @id @default(autoincrement())
+  reporterId  Int
+  reportedId  Int
+  category    String   // Inappropriate Content, Spam, Abusive Behavior, Catfishing, Other
+  reason      String   // Compulsory comment
+  status      String   @default("pending") // pending, reviewed, resolved
+  createdAt   DateTime @default(now())
+
+  reporter    User     @relation("ReportsMade", fields: [reporterId], references: [id])
+  reported    User     @relation("ReportsReceived", fields: [reportedId], references: [id])
+
+  @@index([reporterId])
+  @@index([reportedId])
 }
 
 model Confession {

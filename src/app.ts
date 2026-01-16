@@ -11,6 +11,7 @@ import userRoutes from './routes/user.routes';
 import callRoutes from './routes/call.routes';
 import hostRoutes from './routes/host.routes';
 import mediaRoutes from './routes/media.routes';
+import reportRoutes from './routes/report.routes';
 
 dotenv.config();
 
@@ -41,6 +42,7 @@ app.use('/api/user', userRoutes);
 app.use('/api/calls', callRoutes);
 app.use('/api/host', hostRoutes);
 app.use('/api/media', mediaRoutes);
+app.use('/api/report', reportRoutes); // Add report routes
 
 // 404 handler
 app.use((_req, res) => {

@@ -345,8 +345,23 @@ export const getSwipeProfiles = async (req: AuthRequest, res: Response): Promise
         const allIds = allUserIds.map(u => u.id);
         console.log(`[getSwipeProfiles] All user IDs in database:`, allIds);
 
+        // Get IDs of users this user reported or was reported by (mutual block)
+        const reports = await prisma.report.findMany({
+            where: {
+                OR: [
+                    { reporterId: userId },
+                    { reportedId: userId }
+                ]
+            },
+            select: { reporterId: true, reportedId: true }
+        });
+
+        const blockedUserIds = reports.map(r => r.reporterId === userId ? r.reportedId : r.reporterId);
+        console.log(`[getSwipeProfiles] Blocked/Reported IDs:`, blockedUserIds);
+
         // Build exclusion list
-        const excludeIds = [userId, ...swipedIds];
+        // Use Set to ensure unique IDs and handle empty arrays gracefully
+        const excludeIds = Array.from(new Set([userId, ...swipedIds, ...blockedUserIds]));
         console.log(`[getSwipeProfiles] Excluding IDs:`, excludeIds);
 
         // TEMPORARY: For debugging - get ALL users first to see what's in DB
