@@ -3,8 +3,8 @@ FROM node:18-slim AS builder
 
 WORKDIR /app
 
-# Install OpenSSL for Prisma
-RUN apt-get update -y && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
+# Install OpenSSL for Prisma and FFmpeg for voice notes
+RUN apt-get update -y && apt-get install -y openssl ffmpeg && rm -rf /var/lib/apt/lists/*
 
 # Install dependencies specifically for building
 COPY package*.json ./
@@ -26,8 +26,8 @@ FROM node:18-slim
 
 WORKDIR /app
 
-# Install OpenSSL for Prisma
-RUN apt-get update -y && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
+# Install OpenSSL for Prisma and FFmpeg for voice notes
+RUN apt-get update -y && apt-get install -y openssl ffmpeg && rm -rf /var/lib/apt/lists/*
 
 # Install production dependencies only
 COPY package*.json ./

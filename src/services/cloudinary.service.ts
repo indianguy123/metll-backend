@@ -152,14 +152,6 @@ export const uploadAudioToCloudinary = async (
 export const extractPublicIdFromUrl = (url: string): string | null => {
   try {
     // Example: https://res.cloudinary.com/cloudname/image/upload/v12345678/folder/filename.jpg
-    const parts = url.split('/');
-    const filenameWithVersion = parts[parts.length - 1];
-    const filenameParts = filenameWithVersion.split('.');
-
-    // Join all parts except the last one (extension) to get the filename
-    // Actually, Cloudinary publicID usually includes the folder path if defined.
-    // Better regex approach:
-
     // Regex to capture everything after 'upload/' and version (v1234/), up to the extension
     const regex = /\/upload\/(?:v\d+\/)?(.+)\.[a-zA-Z0-9]+$/;
     const match = url.match(regex);
