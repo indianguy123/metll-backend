@@ -103,6 +103,14 @@ export const redeemReward = async (req: AuthRequest, res: Response): Promise<voi
             return r;
         });
 
+        // Notify user that their reward was activated
+        try {
+            const { notifyRewardUsed } = await import('../services/notification.service');
+            await notifyRewardUsed(userId);
+        } catch (notifyError) {
+            console.error('Failed to send reward notification:', notifyError);
+        }
+
         res.status(200).json({
             success: true,
             message: 'Reward redeemed successfully',

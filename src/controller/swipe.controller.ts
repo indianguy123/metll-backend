@@ -2,6 +2,7 @@ import { Response } from 'express';
 import prisma from '../config/database.config';
 import { AuthRequest } from '../types';
 import { extractPublicIdFromUrl, deleteResourcesFromCloudinary } from '../services/cloudinary.service';
+import { notifyNewMatch, notifyNewLike, notifyUnmatch } from '../services/notification.service';
 
 /**
  * Record a swipe action and check for mutual match
@@ -80,7 +81,13 @@ export const recordSwipe = async (req: AuthRequest, res: Response): Promise<void
         });
 
         if (!mutualSwipe) {
-            // No match yet
+            // No match yet - but notify target user about the like
+            try {
+                await notifyNewLike(targetUserId);
+            } catch (notifyError) {
+                console.error('Failed to send like notification:', notifyError);
+            }
+
             res.status(200).json({
                 success: true,
                 message: 'Swipe recorded.',
@@ -190,6 +197,7 @@ export const recordSwipe = async (req: AuthRequest, res: Response): Promise<void
         });
 
         const rawMatchedUser: any = match.user1.id === userId ? match.user2 : match.user1;
+        const currentUserData: any = match.user1.id === userId ? match.user1 : match.user2;
         const matchedUser = {
             id: rawMatchedUser.id,
             name: rawMatchedUser.name,
@@ -199,6 +207,30 @@ export const recordSwipe = async (req: AuthRequest, res: Response): Promise<void
             profilePhoto: rawMatchedUser.photos?.find((p: any) => p.type === 'profile')?.url || null,
             images: rawMatchedUser.photos?.filter((p: any) => p.type === 'additional')?.map((p: any) => p.url) || [],
         };
+
+        // Send match notifications to BOTH users
+        try {
+            const currentUserPhoto = currentUserData.photos?.find((p: any) => p.type === 'profile')?.url;
+            const matchedUserPhoto = rawMatchedUser.photos?.find((p: any) => p.type === 'profile')?.url;
+
+            // Notify the target user (who already liked us)
+            await notifyNewMatch(
+                targetUserId,
+                currentUserData.name || 'Someone',
+                match.id,
+                currentUserPhoto
+            );
+
+            // Notify current user
+            await notifyNewMatch(
+                userId,
+                rawMatchedUser.name || 'Someone',
+                match.id,
+                matchedUserPhoto
+            );
+        } catch (notifyError) {
+            console.error('Failed to send match notifications:', notifyError);
+        }
 
         res.status(200).json({
             success: true,
@@ -416,7 +448,7 @@ export const getSwipeProfiles = async (req: AuthRequest, res: Response): Promise
 
         // Build profile filter conditions
         const profileConditions: any = {};
-        
+
         // Age filter
         if (ageMin !== undefined || ageMax !== undefined) {
             profileConditions.age = {};

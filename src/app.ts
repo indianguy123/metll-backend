@@ -12,6 +12,7 @@ import callRoutes from './routes/call.routes';
 import hostRoutes from './routes/host.routes';
 import mediaRoutes from './routes/media.routes';
 import reportRoutes from './routes/report.routes';
+import notificationRoutes from './routes/notification.routes';
 
 dotenv.config();
 
@@ -43,6 +44,7 @@ app.use('/api/calls', callRoutes);
 app.use('/api/host', hostRoutes);
 app.use('/api/media', mediaRoutes);
 app.use('/api/report', reportRoutes); // Add report routes
+app.use('/api/notifications', notificationRoutes); // Add notification routes
 
 // 404 handler
 app.use((_req, res) => {

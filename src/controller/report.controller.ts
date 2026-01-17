@@ -168,6 +168,14 @@ export const submitReport = async (req: AuthRequest, res: Response): Promise<voi
         });
         console.log(`[submitReport] Deleted ${deletedSwipes.count} swipe records`);
 
+        // Notify reporter that their report was received
+        try {
+            const { notifyReportSubmitted } = await import('../services/notification.service');
+            await notifyReportSubmitted(userId);
+        } catch (notifyError) {
+            console.error('Failed to send report notification:', notifyError);
+        }
+
         res.status(200).json({
             success: true,
             message: 'User reported and blocked successfully.',

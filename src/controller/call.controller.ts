@@ -3,6 +3,7 @@ import prisma from '../config/database.config';
 import { AuthRequest } from '../types';
 import { getSocketIO } from '../config/socket.config';
 import { RtcTokenBuilder, RtcRole } from 'agora-access-token';
+import { notifyIncomingCall } from '../services/notification.service';
 
 // Get Agora credentials from environment
 const AGORA_APP_ID = process.env.AGORA_APP_ID || '';
@@ -131,11 +132,21 @@ export const initiateCall = async (req: AuthRequest, res: Response): Promise<voi
         const callerToken = generateAgoraToken(channelName, callerId);
         const receiverToken = generateAgoraToken(channelName, receiverId);
 
+        // Get caller info for notification
+        const rawCaller: any = match.user1Id === userId ? match.user1 : match.user2;
+        const callerName = rawCaller.name || 'Someone';
+        const callerPhoto = rawCaller.photos?.[0]?.url || undefined;
+
+        // Send FCM push notification for incoming call
+        try {
+            await notifyIncomingCall(receiverId, callerName, call.id, type, callerPhoto);
+        } catch (notifyError) {
+            console.error('Failed to send call notification:', notifyError);
+        }
+
         // Emit socket event to notify receiver of incoming call
         const io = getSocketIO();
         if (io) {
-            const rawCaller: any = match.user1Id === userId ? match.user1 : match.user2;
-            const callerPhoto = rawCaller.photos?.[0]?.url || null;
             const callData = {
                 callId: call.id,
                 matchId,
