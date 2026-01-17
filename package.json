@@ -6,10 +6,11 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "nodemon --watch src --exec tsx src/server.ts",
-    "build": "tsc",
+    "build": "prisma generate && prisma db push && tsc",
     "start": "node dist/server.js",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
+    "prisma:push": "prisma db push",
     "prisma:studio": "prisma studio",
     "prisma:seed": "tsx prisma/seed.ts"
   },
