@@ -55,7 +55,9 @@ export const updateUserProfile = async (req: AuthRequest, res: Response): Promis
     } = req.body;
 
     console.log(`[updateUserProfile] User ${userId} payload:`, {
-      name, bio, age, gender, school: !!school, college: !!college, office: !!office,
+      name, bio, age, gender, height, 
+      latitude, longitude, currentCity,
+      school: !!school, college: !!college, office: !!office,
       homeLocation: !!homeLocation, situations: situationResponses?.length
     });
 
@@ -92,12 +94,16 @@ export const updateUserProfile = async (req: AuthRequest, res: Response): Promis
       }
     }
 
+    console.log(`[updateUserProfile] User ${userId} profileData to save:`, profileData);
+
     // Always upsert UserProfile so the row exists (create with userId if missing)
     await prisma.userProfile.upsert({
       where: { userId },
       update: { ...profileData, updatedAt: new Date() },
       create: { userId, ...profileData },
     });
+    
+    console.log(`[updateUserProfile] User ${userId} UserProfile upserted successfully`);
 
     // Handle Personality Responses (Situation Responses)
     if (situationResponses && Array.isArray(situationResponses)) {

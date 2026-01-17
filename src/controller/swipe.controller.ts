@@ -433,6 +433,14 @@ export const getSwipeProfiles = async (req: AuthRequest, res: Response): Promise
         });
         const userLat = currentUser?.profile?.latitude;
         const userLon = currentUser?.profile?.longitude;
+        
+        console.log(`[getSwipeProfiles] Current user location:`, {
+            userId,
+            hasProfile: !!currentUser?.profile,
+            latitude: userLat,
+            longitude: userLon,
+            canCalculateDistance: !!(userLat && userLon),
+        });
 
         // Build exclusion list
         // Use Set to ensure unique IDs and handle empty arrays gracefully
