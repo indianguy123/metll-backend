@@ -449,7 +449,7 @@ export const submitHostAnswer = async (req: AuthRequest, res: Response): Promise
         const senderType = isUser1 ? 'user1' : 'user2';
 
         // Save user answer
-        await prisma.chatHostMessage.create({
+        const userAnswerMessage = await prisma.chatHostMessage.create({
             data: {
                 sessionId: session.id,
                 senderType,
@@ -458,6 +458,23 @@ export const submitHostAnswer = async (req: AuthRequest, res: Response): Promise
                 messageType: 'text',
             },
         });
+
+        // Immediately broadcast the user's answer to both users in the chat
+        const io = getSocketIO();
+        if (io && match.chatRoom) {
+            io.to(`chat:${match.chatRoom.id}`).emit('host_message', {
+                message: {
+                    id: userAnswerMessage.id,
+                    senderType: senderType,
+                    senderId: userId,
+                    content: userAnswerMessage.content,
+                    messageType: userAnswerMessage.messageType,
+                    metadata: null,
+                    createdAt: userAnswerMessage.createdAt,
+                },
+                sessionId: session.id,
+            });
+        }
 
         // Update stage data
         const stageData = (session.stageData as any) || {};
