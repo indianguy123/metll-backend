@@ -143,17 +143,18 @@ export const initializeSocketIO = (httpServer: HTTPServer): SocketIOServer => {
                             select: {
                                 id: true,
                                 name: true,
-                                profilePhoto: true,
+                                photos: { where: { type: 'profile' }, take: 1 },
                             },
                         },
                     },
                 });
 
+                const senderPhoto = (message.sender as any).photos?.[0]?.url || null;
                 const messageData = {
                     id: message.id,
                     senderId: message.senderId,
                     senderName: message.sender.name,
-                    senderPhoto: message.sender.profilePhoto,
+                    senderPhoto,
                     content: message.content,
                     type: message.type,
                     mediaUrl: message.mediaUrl,

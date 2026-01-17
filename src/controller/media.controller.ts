@@ -279,7 +279,7 @@ export const sendVoiceNoteMessage = async (req: AuthRequest, res: Response): Pro
                     select: {
                         id: true,
                         name: true,
-                        profilePhoto: true,
+                        photos: { where: { type: 'profile' }, take: 1 },
                     },
                 },
             },
@@ -288,11 +288,12 @@ export const sendVoiceNoteMessage = async (req: AuthRequest, res: Response): Pro
         // Broadcast to socket
         const io = getSocketIO();
         if (io) {
+            const senderPhoto = message.sender.photos?.[0]?.url || null;
             const messageData = {
                 id: message.id,
                 senderId: message.senderId,
                 senderName: message.sender.name,
-                senderPhoto: message.sender.profilePhoto,
+                senderPhoto,
                 content: message.content,
                 type: message.type,
                 mediaUrl: message.mediaUrl,
@@ -402,7 +403,7 @@ export const sendGifMessage = async (req: AuthRequest, res: Response): Promise<v
                     select: {
                         id: true,
                         name: true,
-                        profilePhoto: true,
+                        photos: { where: { type: 'profile' }, take: 1 },
                     },
                 },
             },
@@ -411,11 +412,12 @@ export const sendGifMessage = async (req: AuthRequest, res: Response): Promise<v
         // Broadcast to socket
         const io = getSocketIO();
         if (io) {
+            const senderPhoto = message.sender.photos?.[0]?.url || null;
             const messageData = {
                 id: message.id,
                 senderId: message.senderId,
                 senderName: message.sender.name,
-                senderPhoto: message.sender.profilePhoto,
+                senderPhoto,
                 content: message.content,
                 type: message.type,
                 mediaUrl: message.mediaUrl,

@@ -57,45 +57,65 @@ export const uploadVerificationPhoto = async (req: AuthRequest, res: Response): 
             return;
         }
 
-        // Step 2: Get current user to check for existing profile photo
-        const currentUser = await prisma.user.findUnique({
-            where: { id: userId },
-            select: { profilePhotoPublicId: true },
+        // Step 2: Get current profile photo to check for existing
+        const existingPhoto = await prisma.userPhoto.findFirst({
+            where: { userId, type: 'profile' },
         });
 
         // Delete old profile photo if exists
-        if (currentUser?.profilePhotoPublicId) {
-            await deleteImageFromCloudinary(currentUser.profilePhotoPublicId);
+        if (existingPhoto?.publicId) {
+            await deleteImageFromCloudinary(existingPhoto.publicId);
         }
 
         // Step 3: Upload to Cloudinary
         const uploadResult = await uploadImageToCloudinary(imageBuffer, userId, 'verification');
 
-        // Step 4: Update user in database
-        const updatedUser = await prisma.user.update({
+        // Step 4: Upsert profile photo in UserPhoto table
+        if (existingPhoto) {
+            await prisma.userPhoto.update({
+                where: { id: existingPhoto.id },
+                data: {
+                    url: uploadResult.url,
+                    publicId: uploadResult.publicId,
+                },
+            });
+        } else {
+            await prisma.userPhoto.create({
+                data: {
+                    userId,
+                    url: uploadResult.url,
+                    publicId: uploadResult.publicId,
+                    type: 'profile',
+                    order: 0,
+                },
+            });
+        }
+
+        // Step 5: Update/create verification record
+        await prisma.userVerification.upsert({
+            where: { userId },
+            update: {
+                status: 'photo_uploaded',
+                score: null,
+            },
+            create: {
+                userId,
+                status: 'photo_uploaded',
+            },
+        });
+
+        // Reset user verification status
+        await prisma.user.update({
             where: { id: userId },
-            data: {
-                profilePhoto: uploadResult.url,
-                profilePhotoPublicId: uploadResult.publicId,
-                verificationStatus: 'photo_uploaded',
-                faceId: null, // Reset faceId on new photo upload
-                verificationScore: null,
-                isVerified: false, // Reset verification on new photo
-            },
-            select: {
-                id: true,
-                profilePhoto: true,
-                verificationStatus: true,
-                isVerified: true,
-            },
+            data: { isVerified: false },
         });
 
         res.status(200).json({
             success: true,
             message: 'Photo uploaded successfully. Face detected with good quality.',
             data: {
-                profilePhoto: updatedUser.profilePhoto,
-                verificationStatus: updatedUser.verificationStatus,
+                profilePhoto: uploadResult.url,
+                verificationStatus: 'photo_uploaded',
                 qualityScore: faceDetectionResult.qualityScore,
                 nextStep: 'liveness',
             },
@@ -137,16 +157,17 @@ export const verifyLivenessVideo = async (req: AuthRequest, res: Response): Prom
             return;
         }
 
-        // Get user with profile photo
-        const user = await prisma.user.findUnique({
-            where: { id: userId },
-            select: {
-                profilePhoto: true,
-                verificationStatus: true,
-            },
+        // Get profile photo from UserPhoto table
+        const profilePhoto = await prisma.userPhoto.findFirst({
+            where: { userId, type: 'profile' },
         });
 
-        if (!user?.profilePhoto) {
+        // Get verification record
+        const verification = await prisma.userVerification.findUnique({
+            where: { userId },
+        });
+
+        if (!profilePhoto) {
             res.status(400).json({
                 success: false,
                 message: 'Please upload a profile photo first before liveness verification.',
@@ -154,10 +175,11 @@ export const verifyLivenessVideo = async (req: AuthRequest, res: Response): Prom
             return;
         }
 
-        if (user.verificationStatus !== 'photo_uploaded' && user.verificationStatus !== 'liveness_pending') {
+        const verificationStatus = verification?.status || 'pending';
+        if (verificationStatus !== 'photo_uploaded' && verificationStatus !== 'liveness_pending') {
             res.status(400).json({
                 success: false,
-                message: `Invalid verification status: ${user.verificationStatus}. Please upload a profile photo first.`,
+                message: `Invalid verification status: ${verificationStatus}. Please upload a profile photo first.`,
             });
             return;
         }
@@ -165,7 +187,7 @@ export const verifyLivenessVideo = async (req: AuthRequest, res: Response): Prom
         const videoBuffer = req.file.buffer;
 
         // Download profile photo for comparison
-        const profilePhotoBuffer = await downloadImage(user.profilePhoto);
+        const profilePhotoBuffer = await downloadImage(profilePhoto.url);
 
         if (!profilePhotoBuffer) {
             res.status(500).json({
@@ -180,11 +202,10 @@ export const verifyLivenessVideo = async (req: AuthRequest, res: Response): Prom
 
         if (!livenessResult.success) {
             // Update status to pending if failed
-            await prisma.user.update({
-                where: { id: userId },
-                data: {
-                    verificationStatus: 'liveness_pending',
-                },
+            await prisma.userVerification.upsert({
+                where: { userId },
+                update: { status: 'liveness_pending' },
+                create: { userId, status: 'liveness_pending' },
             });
 
             res.status(400).json({
@@ -200,12 +221,18 @@ export const verifyLivenessVideo = async (req: AuthRequest, res: Response): Prom
 
         if (!livenessResult.isMatch) {
             // Failed verification due to low similarity
-            await prisma.user.update({
-                where: { id: userId },
-                data: {
-                    verificationStatus: 'failed',
-                    verificationScore: livenessResult.similarity,
-                    verificationDate: new Date(),
+            await prisma.userVerification.upsert({
+                where: { userId },
+                update: {
+                    status: 'failed',
+                    score: livenessResult.similarity,
+                    verifiedAt: new Date(),
+                },
+                create: {
+                    userId,
+                    status: 'failed',
+                    score: livenessResult.similarity,
+                    verifiedAt: new Date(),
                 },
             });
 
@@ -223,33 +250,39 @@ export const verifyLivenessVideo = async (req: AuthRequest, res: Response): Prom
 
         // Upload verification video to Cloudinary (optional - for audit)
         let videoUrl: string | null = null;
+        let videoPublicId: string | null = null;
         try {
             const videoUploadResult = await uploadVideoToCloudinary(videoBuffer, userId, 'liveness');
             videoUrl = videoUploadResult.url;
+            videoPublicId = videoUploadResult.publicId;
         } catch (uploadError) {
             console.error('Failed to upload verification video:', uploadError);
             // Continue even if video upload fails
         }
 
-        // Generate liveness session ID
-        const livenessSessionId = `liveness_${userId}_${Date.now()}`;
-
         // Update user as verified
-        const updatedUser = await prisma.user.update({
+        await prisma.user.update({
             where: { id: userId },
-            data: {
-                isVerified: true,
-                verificationStatus: 'verified',
-                verificationScore: livenessResult.similarity,
-                verificationDate: new Date(),
-                livenessSessionId,
+            data: { isVerified: true },
+        });
+
+        // Update verification record
+        const updatedVerification = await prisma.userVerification.upsert({
+            where: { userId },
+            update: {
+                status: 'verified',
+                score: livenessResult.similarity,
+                verifiedAt: new Date(),
+                videoUrl,
+                videoPublicId,
             },
-            select: {
-                id: true,
-                isVerified: true,
-                verificationStatus: true,
-                verificationScore: true,
-                verificationDate: true,
+            create: {
+                userId,
+                status: 'verified',
+                score: livenessResult.similarity,
+                verifiedAt: new Date(),
+                videoUrl,
+                videoPublicId,
             },
         });
 
@@ -257,10 +290,10 @@ export const verifyLivenessVideo = async (req: AuthRequest, res: Response): Prom
             success: true,
             message: 'Congratulations! Your identity has been verified.',
             data: {
-                isVerified: updatedUser.isVerified,
-                verificationStatus: updatedUser.verificationStatus,
-                verificationScore: updatedUser.verificationScore,
-                verificationDate: updatedUser.verificationDate,
+                isVerified: true,
+                verificationStatus: updatedVerification.status,
+                verificationScore: updatedVerification.score,
+                verificationDate: updatedVerification.verifiedAt,
                 videoUrl,
             },
         });
@@ -288,13 +321,15 @@ export const getVerificationStatus = async (req: AuthRequest, res: Response): Pr
 
         const user = await prisma.user.findUnique({
             where: { id: userId },
-            select: {
-                profilePhoto: true,
-                isVerified: true,
-                verificationStatus: true,
-                verificationScore: true,
-                verificationDate: true,
-            },
+            select: { isVerified: true },
+        });
+
+        const profilePhoto = await prisma.userPhoto.findFirst({
+            where: { userId, type: 'profile' },
+        });
+
+        const verification = await prisma.userVerification.findUnique({
+            where: { userId },
         });
 
         if (!user) {
@@ -302,12 +337,13 @@ export const getVerificationStatus = async (req: AuthRequest, res: Response): Pr
             return;
         }
 
+        const verificationStatus = verification?.status || 'pending';
+
         // Determine next step based on status
         let nextStep: string | null = null;
         let progress = 0;
 
-        switch (user.verificationStatus) {
-            case null:
+        switch (verificationStatus) {
             case 'pending':
                 nextStep = 'photo';
                 progress = 0;
@@ -333,11 +369,11 @@ export const getVerificationStatus = async (req: AuthRequest, res: Response): Pr
         res.status(200).json({
             success: true,
             data: {
-                profilePhoto: user.profilePhoto,
+                profilePhoto: profilePhoto?.url || null,
                 isVerified: user.isVerified,
-                verificationStatus: user.verificationStatus || 'pending',
-                verificationScore: user.verificationScore,
-                verificationDate: user.verificationDate,
+                verificationStatus,
+                verificationScore: verification?.score || null,
+                verificationDate: verification?.verifiedAt || null,
                 nextStep,
                 progress,
             },

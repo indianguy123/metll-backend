@@ -62,8 +62,8 @@ export const initiateCall = async (req: AuthRequest, res: Response): Promise<voi
             where: { id: matchId },
             include: {
                 chatRoom: true,
-                user1: { select: { id: true, name: true, profilePhoto: true } },
-                user2: { select: { id: true, name: true, profilePhoto: true } },
+                user1: { select: { id: true, name: true, photos: { where: { type: 'profile' }, take: 1 } } },
+                user2: { select: { id: true, name: true, photos: { where: { type: 'profile' }, take: 1 } } },
             },
         });
 
@@ -81,7 +81,12 @@ export const initiateCall = async (req: AuthRequest, res: Response): Promise<voi
         // Determine caller and receiver
         const callerId = userId;
         const receiverId = match.user1Id === userId ? match.user2Id : match.user1Id;
-        const receiver = match.user1Id === userId ? match.user2 : match.user1;
+        const rawReceiver: any = match.user1Id === userId ? match.user2 : match.user1;
+        const receiver = {
+            id: rawReceiver.id,
+            name: rawReceiver.name,
+            profilePhoto: rawReceiver.photos?.[0]?.url || null,
+        };
 
         // Get or create chat room
         let chatRoom = match.chatRoom;

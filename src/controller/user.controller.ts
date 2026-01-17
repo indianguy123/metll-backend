@@ -47,6 +47,10 @@ export const updateUserProfile = async (req: AuthRequest, res: Response): Promis
       height,
       currentCity,
       pastCity,
+      school,
+      college,
+      office,
+      homeLocation,
     } = req.body;
 
     // Update User table (only name and email)
@@ -69,6 +73,16 @@ export const updateUserProfile = async (req: AuthRequest, res: Response): Promis
     if (longitude !== undefined) profileData.longitude = parseFloat(longitude) || null;
     if (currentCity !== undefined) profileData.currentCity = currentCity;
     if (pastCity !== undefined) profileData.pastCity = pastCity;
+    
+    // Handle homeLocation (current/past addresses)
+    if (homeLocation) {
+      if (homeLocation.current) {
+        profileData.currentCity = homeLocation.current.city || homeLocation.current.address;
+      }
+      if (homeLocation.past) {
+        profileData.pastCity = homeLocation.past.city || homeLocation.past.address;
+      }
+    }
 
     if (Object.keys(profileData).length > 0) {
       await prisma.userProfile.upsert({
@@ -78,7 +92,67 @@ export const updateUserProfile = async (req: AuthRequest, res: Response): Promis
       });
     }
 
-    // Fetch updated user with profile
+    // Update or create UserSchool if provided
+    if (school && school.name) {
+      await prisma.userSchool.upsert({
+        where: { userId },
+        update: {
+          name: school.name,
+          city: school.city || null,
+          state: school.state || null,
+          class: school.class || null,
+          section: school.section || null,
+        },
+        create: {
+          userId,
+          name: school.name,
+          city: school.city || null,
+          state: school.state || null,
+          class: school.class || null,
+          section: school.section || null,
+        },
+      });
+    }
+
+    // Update or create UserCollege if provided
+    if (college && college.name) {
+      await prisma.userCollege.upsert({
+        where: { userId },
+        update: {
+          name: college.name,
+          department: college.department || null,
+          location: college.location || null,
+        },
+        create: {
+          userId,
+          name: college.name,
+          department: college.department || null,
+          location: college.location || null,
+        },
+      });
+    }
+
+    // Update or create UserOffice if provided
+    if (office && office.name) {
+      await prisma.userOffice.upsert({
+        where: { userId },
+        update: {
+          name: office.name,
+          designation: office.designation || null,
+          department: office.department || null,
+          location: office.location || null,
+        },
+        create: {
+          userId,
+          name: office.name,
+          designation: office.designation || null,
+          department: office.department || null,
+          location: office.location || null,
+        },
+      });
+    }
+
+    // Fetch updated user with profile and related data
     const updatedUser = await prisma.user.findUnique({
       where: { id: userId },
       include: {
@@ -86,6 +160,9 @@ export const updateUserProfile = async (req: AuthRequest, res: Response): Promis
         photos: { orderBy: { order: 'asc' } },
         verification: true,
         datingPrefs: true,
+        school: true,
+        college: true,
+        office: true,
       },
     });
 
@@ -103,8 +180,31 @@ export const updateUserProfile = async (req: AuthRequest, res: Response): Promis
       gender: updatedUser?.profile?.gender,
       height: updatedUser?.profile?.height,
       currentCity: updatedUser?.profile?.currentCity,
+      pastCity: updatedUser?.profile?.pastCity,
       photo: profilePhoto?.url,
       additionalPhotos,
+      school: updatedUser?.school ? {
+        name: updatedUser.school.name,
+        city: updatedUser.school.city,
+        state: updatedUser.school.state,
+        class: updatedUser.school.class,
+        section: updatedUser.school.section,
+      } : null,
+      college: updatedUser?.college ? {
+        name: updatedUser.college.name,
+        department: updatedUser.college.department,
+        location: updatedUser.college.location,
+      } : null,
+      office: updatedUser?.office ? {
+        name: updatedUser.office.name,
+        designation: updatedUser.office.designation,
+        department: updatedUser.office.department,
+        location: updatedUser.office.location,
+      } : null,
+      homeLocation: (updatedUser?.profile?.currentCity || updatedUser?.profile?.pastCity) ? {
+        current: updatedUser?.profile?.currentCity ? { city: updatedUser.profile.currentCity } : undefined,
+        past: updatedUser?.profile?.pastCity ? { city: updatedUser.profile.pastCity } : undefined,
+      } : null,
       isVerified: updatedUser?.isVerified,
       isOnboarded: updatedUser?.isOnboarded,
       isDiscoverOnboarded: updatedUser?.isDiscoverOnboarded,
@@ -526,7 +626,7 @@ export const updateSituationResponses = async (req: AuthRequest, res: Response):
         prisma.personalityResponse.create({
           data: {
             userId,
-            questionId: Number(r.questionId),
+            questionId: parseInt(r.questionId) || 0,
             answer: String(r.answer),
           },
         })
@@ -777,7 +877,7 @@ export const updateHomeLocation = async (req: AuthRequest, res: Response): Promi
       return;
     }
 
-    const { city, latitude, longitude } = req.body;
+    const { city, country: _country, latitude, longitude } = req.body;
 
     const profile = await prisma.userProfile.upsert({
       where: { userId },

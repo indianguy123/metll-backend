@@ -123,28 +123,36 @@ export const recordSwipe = async (req: AuthRequest, res: Response): Promise<void
                         select: {
                             id: true,
                             name: true,
-                            images: true,
-                            profilePhoto: true,
                             isVerified: true,
-                            profile: { select: { bio: true, age: true } }
+                            profile: { select: { bio: true, age: true } },
+                            photos: { orderBy: { order: 'asc' } },
                         },
                     },
                     user2: {
                         select: {
                             id: true,
                             name: true,
-                            images: true,
-                            profilePhoto: true,
                             isVerified: true,
-                            profile: { select: { bio: true, age: true } }
+                            profile: { select: { bio: true, age: true } },
+                            photos: { orderBy: { order: 'asc' } },
                         },
                     },
-                } as any,
-            }) as unknown as MatchWithDetails;
+                },
+            });
 
-            const matchedUser = matchWithUser?.user1.id === userId
+            const rawUser: any = matchWithUser?.user1.id === userId
                 ? matchWithUser?.user2
                 : matchWithUser?.user1;
+
+            const matchedUser = rawUser ? {
+                id: rawUser.id,
+                name: rawUser.name,
+                isVerified: rawUser.isVerified,
+                bio: rawUser.profile?.bio || null,
+                age: rawUser.profile?.age || null,
+                profilePhoto: rawUser.photos?.find((p: any) => p.type === 'profile')?.url || null,
+                images: rawUser.photos?.filter((p: any) => p.type === 'additional')?.map((p: any) => p.url) || [],
+            } : null;
 
             res.status(200).json({
                 success: true,
@@ -178,26 +186,33 @@ export const recordSwipe = async (req: AuthRequest, res: Response): Promise<void
                     select: {
                         id: true,
                         name: true,
-                        images: true,
-                        profilePhoto: true,
                         isVerified: true,
-                        profile: { select: { bio: true, age: true } }
+                        profile: { select: { bio: true, age: true } },
+                        photos: { orderBy: { order: 'asc' } },
                     },
                 },
                 user2: {
                     select: {
                         id: true,
                         name: true,
-                        images: true,
-                        profilePhoto: true,
                         isVerified: true,
-                        profile: { select: { bio: true, age: true } }
+                        profile: { select: { bio: true, age: true } },
+                        photos: { orderBy: { order: 'asc' } },
                     },
                 },
-            } as any,
-        }) as unknown as MatchWithDetails;
+            },
+        });
 
-        const matchedUser = match.user1.id === userId ? match.user2 : match.user1;
+        const rawMatchedUser: any = match.user1.id === userId ? match.user2 : match.user1;
+        const matchedUser = {
+            id: rawMatchedUser.id,
+            name: rawMatchedUser.name,
+            isVerified: rawMatchedUser.isVerified,
+            bio: rawMatchedUser.profile?.bio || null,
+            age: rawMatchedUser.profile?.age || null,
+            profilePhoto: rawMatchedUser.photos?.find((p: any) => p.type === 'profile')?.url || null,
+            images: rawMatchedUser.photos?.filter((p: any) => p.type === 'additional')?.map((p: any) => p.url) || [],
+        };
 
         res.status(200).json({
             success: true,
@@ -283,20 +298,29 @@ export const getWhoLikedMe = async (req: AuthRequest, res: Response): Promise<vo
                 id: true,
                 name: true,
                 profile: true,
-                images: true,
-                profilePhoto: true,
+                photos: { orderBy: { order: 'asc' } },
                 isVerified: true,
                 school: true,
                 college: true,
                 office: true,
-            } as any,
+            },
         });
 
-        // Add likedAt timestamp
-        const likersWithTimestamp = likers.map(liker => {
+        // Add likedAt timestamp and transform photos
+        const likersWithTimestamp = likers.map((liker: any) => {
             const likeRecord = incomingLikes.find(l => l.swiperId === liker.id);
+            const profilePhoto = liker.photos?.find((p: any) => p.type === 'profile')?.url || null;
+            const images = liker.photos?.filter((p: any) => p.type === 'additional')?.map((p: any) => p.url) || [];
             return {
-                ...liker,
+                id: liker.id,
+                name: liker.name,
+                profile: liker.profile,
+                profilePhoto,
+                images,
+                isVerified: liker.isVerified,
+                school: liker.school,
+                college: liker.college,
+                office: liker.office,
                 likedAt: likeRecord?.createdAt,
             };
         });
@@ -499,20 +523,18 @@ export const getMatches = async (req: AuthRequest, res: Response): Promise<void>
                     select: {
                         id: true,
                         name: true,
-                        images: true,
-                        profilePhoto: true,
                         isVerified: true,
-                        profile: { select: { bio: true, age: true } }
+                        profile: { select: { bio: true, age: true } },
+                        photos: { orderBy: { order: 'asc' } },
                     },
                 },
                 user2: {
                     select: {
                         id: true,
                         name: true,
-                        images: true,
-                        profilePhoto: true,
                         isVerified: true,
-                        profile: { select: { bio: true, age: true } }
+                        profile: { select: { bio: true, age: true } },
+                        photos: { orderBy: { order: 'asc' } },
                     },
                 },
                 chatRoom: {
@@ -523,14 +545,28 @@ export const getMatches = async (req: AuthRequest, res: Response): Promise<void>
                         },
                     },
                 },
-            } as any,
+            },
             orderBy: { matchedAt: 'desc' },
-        }) as unknown as MatchWithDetails[];
+        });
 
         // Transform to show matched user and last message
-        const formattedMatches = matches.map((match) => {
-            const matchedUser = match.user1.id === userId ? match.user2 : match.user1;
+        const formattedMatches = matches.map((match: any) => {
+            const rawUser = match.user1.id === userId ? match.user2 : match.user1;
             const lastMessage = match.chatRoom?.messages[0] || null;
+
+            // Build matchedUser with photo URLs
+            const profilePhoto = rawUser.photos?.find((p: any) => p.type === 'profile')?.url || null;
+            const additionalPhotos = rawUser.photos?.filter((p: any) => p.type === 'additional')?.map((p: any) => p.url) || [];
+
+            const matchedUser = {
+                id: rawUser.id,
+                name: rawUser.name,
+                isVerified: rawUser.isVerified,
+                bio: rawUser.profile?.bio || null,
+                age: rawUser.profile?.age || null,
+                profilePhoto,
+                images: additionalPhotos,
+            };
 
             return {
                 id: match.id,
@@ -591,25 +627,23 @@ export const getMatchById = async (req: AuthRequest, res: Response): Promise<voi
                     select: {
                         id: true,
                         name: true,
-                        images: true,
-                        profilePhoto: true,
                         isVerified: true,
-                        profile: { select: { bio: true, age: true } }
+                        profile: { select: { bio: true, age: true } },
+                        photos: { orderBy: { order: 'asc' } },
                     },
                 },
                 user2: {
                     select: {
                         id: true,
                         name: true,
-                        images: true,
-                        profilePhoto: true,
                         isVerified: true,
-                        profile: { select: { bio: true, age: true } }
+                        profile: { select: { bio: true, age: true } },
+                        photos: { orderBy: { order: 'asc' } },
                     },
                 },
                 chatRoom: true,
-            } as any,
-        }) as unknown as MatchWithDetails;
+            },
+        });
 
         if (!match) {
             res.status(404).json({ success: false, message: 'Match not found.' });
@@ -622,7 +656,16 @@ export const getMatchById = async (req: AuthRequest, res: Response): Promise<voi
             return;
         }
 
-        const matchedUser = match.user1.id === userId ? match.user2 : match.user1;
+        const rawUser: any = match.user1.id === userId ? match.user2 : match.user1;
+        const matchedUser = {
+            id: rawUser.id,
+            name: rawUser.name,
+            isVerified: rawUser.isVerified,
+            bio: rawUser.profile?.bio || null,
+            age: rawUser.profile?.age || null,
+            profilePhoto: rawUser.photos?.find((p: any) => p.type === 'profile')?.url || null,
+            images: rawUser.photos?.filter((p: any) => p.type === 'additional')?.map((p: any) => p.url) || [],
+        };
 
         res.status(200).json({
             success: true,

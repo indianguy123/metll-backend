@@ -30,18 +30,16 @@ export const getChatRoom = async (req: AuthRequest, res: Response): Promise<void
                     select: {
                         id: true,
                         name: true,
-                        images: true,
-                        profilePhoto: true,
                         isVerified: true,
+                        photos: { orderBy: { order: 'asc' } },
                     },
                 },
                 user2: {
                     select: {
                         id: true,
                         name: true,
-                        images: true,
-                        profilePhoto: true,
                         isVerified: true,
+                        photos: { orderBy: { order: 'asc' } },
                     },
                 },
                 chatRoom: {
@@ -53,7 +51,7 @@ export const getChatRoom = async (req: AuthRequest, res: Response): Promise<void
                                     select: {
                                         id: true,
                                         name: true,
-                                        profilePhoto: true,
+                                        photos: { where: { type: 'profile' }, take: 1 },
                                     },
                                 },
                             },
@@ -74,7 +72,14 @@ export const getChatRoom = async (req: AuthRequest, res: Response): Promise<void
             return;
         }
 
-        const matchedUser = match.user1.id === userId ? match.user2 : match.user1;
+        const rawUser: any = match.user1.id === userId ? match.user2 : match.user1;
+        const matchedUser = {
+            id: rawUser.id,
+            name: rawUser.name,
+            isVerified: rawUser.isVerified,
+            profilePhoto: rawUser.photos?.find((p: any) => p.type === 'profile')?.url || null,
+            images: rawUser.photos?.filter((p: any) => p.type === 'additional')?.map((p: any) => p.url) || [],
+        };
 
         // Mark unread messages as read
         if (match.chatRoom) {
@@ -96,10 +101,11 @@ export const getChatRoom = async (req: AuthRequest, res: Response): Promise<void
                 chatRoom: match.chatRoom
                     ? {
                         id: match.chatRoom.id,
-                        messages: match.chatRoom.messages.map((msg) => ({
+                        messages: match.chatRoom.messages.map((msg: any) => ({
                             id: msg.id,
                             senderId: msg.senderId,
                             senderName: msg.sender.name,
+                            senderPhoto: msg.sender.photos?.[0]?.url || null,
                             content: msg.content,
                             type: msg.type,
                             mediaUrl: msg.mediaUrl,
@@ -180,7 +186,6 @@ export const sendMessage = async (req: AuthRequest, res: Response): Promise<void
         }
 
         // Create message
-        // Create message
         const message = await prisma.message.create({
             data: {
                 chatRoomId: match.chatRoom.id,
@@ -194,7 +199,7 @@ export const sendMessage = async (req: AuthRequest, res: Response): Promise<void
                     select: {
                         id: true,
                         name: true,
-                        profilePhoto: true,
+                        photos: { where: { type: 'profile' }, take: 1 },
                     },
                 },
             },
@@ -203,11 +208,12 @@ export const sendMessage = async (req: AuthRequest, res: Response): Promise<void
         // Broadcast to socket
         const io = getSocketIO();
         if (io) {
+            const senderPhoto = (message.sender as any).photos?.[0]?.url || null;
             const messageData = {
                 id: message.id,
                 senderId: message.senderId,
                 senderName: message.sender.name,
-                senderPhoto: message.sender.profilePhoto,
+                senderPhoto,
                 content: message.content,
                 type: message.type,
                 mediaUrl: message.mediaUrl,
