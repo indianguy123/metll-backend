@@ -114,6 +114,11 @@ export const register = async (req: AuthRequest, res: Response): Promise<void> =
       },
     });
 
+    // Create UserProfile row so it exists from the start (required for normalized schema)
+    await prisma.userProfile.create({
+      data: { userId: user.id },
+    });
+
     // Create Referral record if there is a referrer
     if (referrerId) {
       await prisma.referral.create({
@@ -787,7 +792,7 @@ export const updateProfile = async (req: AuthRequest, res: Response): Promise<vo
       });
     }
 
-    // Upsert profile data (bio, age, gender, location)
+    // Upsert profile data (bio, age, gender, location) – always run so UserProfile row exists
     const profileData: any = {};
     if (bio !== undefined) profileData.bio = bio;
     if (age !== undefined) profileData.age = age ? parseInt(age) : null;
@@ -795,16 +800,14 @@ export const updateProfile = async (req: AuthRequest, res: Response): Promise<vo
     if (latitude !== undefined) profileData.latitude = latitude ? parseFloat(latitude) : null;
     if (longitude !== undefined) profileData.longitude = longitude ? parseFloat(longitude) : null;
 
-    if (Object.keys(profileData).length > 0) {
-      await prisma.userProfile.upsert({
-        where: { userId: req.user.id },
-        update: profileData,
-        create: {
-          userId: req.user.id,
-          ...profileData,
-        },
-      });
-    }
+    await prisma.userProfile.upsert({
+      where: { userId: req.user.id },
+      update: { ...profileData, updatedAt: new Date() },
+      create: {
+        userId: req.user.id,
+        ...profileData,
+      },
+    });
 
     // Add new photos to UserPhoto table
     if (uploadedPhotos.length > 0) {

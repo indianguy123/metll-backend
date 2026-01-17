@@ -51,29 +51,37 @@ export const updateUserProfile = async (req: AuthRequest, res: Response): Promis
       college,
       office,
       homeLocation,
+      situationResponses, // Add situationResponses destructuring
     } = req.body;
+
+    console.log(`[updateUserProfile] User ${userId} payload:`, {
+      name, bio, age, gender, school: !!school, college: !!college, office: !!office,
+      homeLocation: !!homeLocation, situations: situationResponses?.length
+    });
 
     // Update User table (only name and email)
     const userUpdateData: any = { updatedAt: new Date() };
     if (name !== undefined) userUpdateData.name = name;
     if (email !== undefined) userUpdateData.email = email;
 
-    await prisma.user.update({
-      where: { id: userId },
-      data: userUpdateData,
-    });
+    if (Object.keys(userUpdateData).length > 1) { // 1 because updatedAt is always there
+      await prisma.user.update({
+        where: { id: userId },
+        data: userUpdateData,
+      });
+    }
 
     // Update or create UserProfile
     const profileData: any = {};
     if (bio !== undefined) profileData.bio = bio;
-    if (age !== undefined) profileData.age = parseInt(age) || null;
+    if (age !== undefined) profileData.age = parseInt(age as string) || null;
     if (gender !== undefined) profileData.gender = gender;
-    if (height !== undefined) profileData.height = parseInt(height) || null;
-    if (latitude !== undefined) profileData.latitude = parseFloat(latitude) || null;
-    if (longitude !== undefined) profileData.longitude = parseFloat(longitude) || null;
+    if (height !== undefined) profileData.height = parseInt(height as string) || null;
+    if (latitude !== undefined) profileData.latitude = parseFloat(latitude as string) || null;
+    if (longitude !== undefined) profileData.longitude = parseFloat(longitude as string) || null;
     if (currentCity !== undefined) profileData.currentCity = currentCity;
     if (pastCity !== undefined) profileData.pastCity = pastCity;
-    
+
     // Handle homeLocation (current/past addresses)
     if (homeLocation) {
       if (homeLocation.current) {
@@ -84,12 +92,34 @@ export const updateUserProfile = async (req: AuthRequest, res: Response): Promis
       }
     }
 
-    if (Object.keys(profileData).length > 0) {
-      await prisma.userProfile.upsert({
+    // Always upsert UserProfile so the row exists (create with userId if missing)
+    await prisma.userProfile.upsert({
+      where: { userId },
+      update: { ...profileData, updatedAt: new Date() },
+      create: { userId, ...profileData },
+    });
+
+    // Handle Personality Responses (Situation Responses)
+    if (situationResponses && Array.isArray(situationResponses)) {
+      // Delete existing responses first (replace all strategy)
+      await prisma.personalityResponse.deleteMany({
         where: { userId },
-        update: { ...profileData, updatedAt: new Date() },
-        create: { userId, ...profileData },
       });
+
+      // Create new responses
+      if (situationResponses.length > 0) {
+        await Promise.all(
+          situationResponses.map((r: any) =>
+            prisma.personalityResponse.create({
+              data: {
+                userId,
+                questionId: parseInt(r.questionId) || 0,
+                answer: String(r.answer),
+              },
+            })
+          )
+        );
+      }
     }
 
     // Update or create UserSchool if provided
@@ -163,53 +193,56 @@ export const updateUserProfile = async (req: AuthRequest, res: Response): Promis
         school: true,
         college: true,
         office: true,
+        personalityResponses: true,
       },
     });
 
     // Build response matching frontend expectations
-    const profilePhoto = updatedUser?.photos?.find(p => p.type === 'profile');
-    const additionalPhotos = updatedUser?.photos?.filter(p => p.type === 'additional')?.map(p => p.url) || [];
+    const userAny = updatedUser as any;
+    const profilePhoto = userAny?.photos?.find((p: any) => p.type === 'profile');
+    const additionalPhotos = userAny?.photos?.filter((p: any) => p.type === 'additional')?.map((p: any) => p.url) || [];
 
     const responseUser = {
-      id: updatedUser?.id,
-      phoneNumber: updatedUser?.phoneNumber,
-      email: updatedUser?.email,
-      name: updatedUser?.name,
-      bio: updatedUser?.profile?.bio,
-      age: updatedUser?.profile?.age,
-      gender: updatedUser?.profile?.gender,
-      height: updatedUser?.profile?.height,
-      currentCity: updatedUser?.profile?.currentCity,
-      pastCity: updatedUser?.profile?.pastCity,
+      id: userAny?.id,
+      phoneNumber: userAny?.phoneNumber,
+      email: userAny?.email,
+      name: userAny?.name,
+      bio: userAny?.profile?.bio,
+      age: userAny?.profile?.age,
+      gender: userAny?.profile?.gender,
+      height: userAny?.profile?.height,
+      currentCity: userAny?.profile?.currentCity,
+      pastCity: userAny?.profile?.pastCity,
       photo: profilePhoto?.url,
       additionalPhotos,
-      school: updatedUser?.school ? {
-        name: updatedUser.school.name,
-        city: updatedUser.school.city,
-        state: updatedUser.school.state,
-        class: updatedUser.school.class,
-        section: updatedUser.school.section,
+      school: userAny?.school ? {
+        name: userAny.school.name,
+        city: userAny.school.city,
+        state: userAny.school.state,
+        class: userAny.school.class,
+        section: userAny.school.section,
       } : null,
-      college: updatedUser?.college ? {
-        name: updatedUser.college.name,
-        department: updatedUser.college.department,
-        location: updatedUser.college.location,
+      college: userAny?.college ? {
+        name: userAny.college.name,
+        department: userAny.college.department,
+        location: userAny.college.location,
       } : null,
-      office: updatedUser?.office ? {
-        name: updatedUser.office.name,
-        designation: updatedUser.office.designation,
-        department: updatedUser.office.department,
-        location: updatedUser.office.location,
+      office: userAny?.office ? {
+        name: userAny.office.name,
+        designation: userAny.office.designation,
+        department: userAny.office.department,
+        location: userAny.office.location,
       } : null,
-      homeLocation: (updatedUser?.profile?.currentCity || updatedUser?.profile?.pastCity) ? {
-        current: updatedUser?.profile?.currentCity ? { city: updatedUser.profile.currentCity } : undefined,
-        past: updatedUser?.profile?.pastCity ? { city: updatedUser.profile.pastCity } : undefined,
+      homeLocation: (userAny?.profile?.currentCity || userAny?.profile?.pastCity) ? {
+        current: userAny?.profile?.currentCity ? { city: userAny.profile.currentCity } : undefined,
+        past: userAny?.profile?.pastCity ? { city: userAny.profile.pastCity } : undefined,
       } : null,
-      isVerified: updatedUser?.isVerified,
-      isOnboarded: updatedUser?.isOnboarded,
-      isDiscoverOnboarded: updatedUser?.isDiscoverOnboarded,
-      createdAt: updatedUser?.createdAt,
-      updatedAt: updatedUser?.updatedAt,
+      situationResponses: userAny?.personalityResponses,
+      isVerified: userAny?.isVerified,
+      isOnboarded: userAny?.isOnboarded,
+      isDiscoverOnboarded: userAny?.isDiscoverOnboarded,
+      createdAt: userAny?.createdAt,
+      updatedAt: userAny?.updatedAt,
     };
 
     res.status(200).json({
@@ -690,39 +723,40 @@ export const getUserProfile = async (req: AuthRequest, res: Response): Promise<v
     }
 
     // Build response matching frontend expectations
-    const profilePhoto = (user as any).photos?.find((p: any) => p.type === 'profile');
-    const additionalPhotos = (user as any).photos?.filter((p: any) => p.type === 'additional')?.map((p: any) => p.url) || [];
+    const userAny = user as any;
+    const profilePhoto = userAny.photos?.find((p: any) => p.type === 'profile');
+    const additionalPhotos = userAny.photos?.filter((p: any) => p.type === 'additional')?.map((p: any) => p.url) || [];
 
     const responseUser = {
-      id: user.id,
-      phoneNumber: user.phoneNumber,
-      email: user.email,
-      name: user.name,
-      bio: user.profile?.bio,
-      age: user.profile?.age,
-      gender: user.profile?.gender,
-      height: user.profile?.height,
-      currentCity: user.profile?.currentCity,
-      pastCity: user.profile?.pastCity,
-      latitude: user.profile?.latitude,
-      longitude: user.profile?.longitude,
+      id: userAny.id,
+      phoneNumber: userAny.phoneNumber,
+      email: userAny.email,
+      name: userAny.name,
+      bio: userAny.profile?.bio,
+      age: userAny.profile?.age,
+      gender: userAny.profile?.gender,
+      height: userAny.profile?.height,
+      currentCity: userAny.profile?.currentCity,
+      pastCity: userAny.profile?.pastCity,
+      latitude: userAny.profile?.latitude,
+      longitude: userAny.profile?.longitude,
       photo: profilePhoto?.url,
       additionalPhotos,
-      verificationVideo: user.verification?.videoUrl,
-      isVerified: user.isVerified,
-      isOnboarded: user.isOnboarded,
-      isDiscoverOnboarded: user.isDiscoverOnboarded,
-      school: user.school,
-      college: user.college,
-      office: user.office,
-      homeLocation: (user.profile?.currentCity || user.profile?.pastCity) ? {
-        current: user.profile?.currentCity ? { city: user.profile.currentCity } : undefined,
-        past: user.profile?.pastCity ? { city: user.profile.pastCity } : undefined,
+      verificationVideo: userAny.verification?.videoUrl,
+      isVerified: userAny.isVerified,
+      isOnboarded: userAny.isOnboarded,
+      isDiscoverOnboarded: userAny.isDiscoverOnboarded,
+      school: userAny.school,
+      college: userAny.college,
+      office: userAny.office,
+      homeLocation: (userAny.profile?.currentCity || userAny.profile?.pastCity) ? {
+        current: userAny.profile?.currentCity ? { city: userAny.profile.currentCity } : undefined,
+        past: userAny.profile?.pastCity ? { city: userAny.profile.pastCity } : undefined,
       } : null,
-      situationResponses: user.personalityResponses,
-      datingPrefs: user.datingPrefs,
-      createdAt: user.createdAt,
-      updatedAt: user.updatedAt,
+      situationResponses: userAny.personalityResponses,
+      datingPrefs: userAny.datingPrefs,
+      createdAt: userAny.createdAt,
+      updatedAt: userAny.updatedAt,
     };
 
     res.status(200).json({

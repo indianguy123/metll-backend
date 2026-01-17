@@ -342,7 +342,13 @@ export const getSwipeProfiles = async (req: AuthRequest, res: Response): Promise
             return;
         }
 
-        console.log(`[getSwipeProfiles] User ID: ${userId}`);
+        // Get filter parameters from query string
+        const ageMin = req.query.ageMin ? parseInt(req.query.ageMin as string) : undefined;
+        const ageMax = req.query.ageMax ? parseInt(req.query.ageMax as string) : undefined;
+        const distanceMax = req.query.distanceMax ? parseFloat(req.query.distanceMax as string) : undefined;
+        const genderPreference = req.query.genderPreference as string | undefined;
+
+        console.log(`[getSwipeProfiles] User ID: ${userId}, Filters:`, { ageMin, ageMax, distanceMax, genderPreference });
 
         // Get total count of all users
         const totalUsers = await prisma.user.count();
@@ -388,31 +394,54 @@ export const getSwipeProfiles = async (req: AuthRequest, res: Response): Promise
         }
         console.log(`[getSwipeProfiles] Blocked/Reported IDs:`, blockedUserIds);
 
+        // Get current user's location for distance filtering
+        const currentUser = await prisma.user.findUnique({
+            where: { id: userId },
+            include: { profile: true },
+        });
+        const userLat = currentUser?.profile?.latitude;
+        const userLon = currentUser?.profile?.longitude;
+
         // Build exclusion list
         // Use Set to ensure unique IDs and handle empty arrays gracefully
         const excludeIds = Array.from(new Set([userId, ...swipedIds, ...blockedUserIds]));
         console.log(`[getSwipeProfiles] Excluding IDs:`, excludeIds);
 
-        // TEMPORARY: For debugging - get ALL users first to see what's in DB
-        const allUsersDebug = await prisma.user.findMany({
-            select: {
-                id: true,
-                name: true,
-                phoneNumber: true,
-                isVerified: true,
-                isOnboarded: true,
+        // Build filter conditions
+        const whereConditions: any = {
+            id: {
+                notIn: excludeIds.length > 0 ? excludeIds : [userId],
             },
-        });
-        console.log(`[getSwipeProfiles] DEBUG - All users in DB:`, JSON.stringify(allUsersDebug, null, 2));
+        };
+
+        // Build profile filter conditions
+        const profileConditions: any = {};
+        
+        // Age filter
+        if (ageMin !== undefined || ageMax !== undefined) {
+            profileConditions.age = {};
+            if (ageMin !== undefined) {
+                profileConditions.age.gte = ageMin;
+            }
+            if (ageMax !== undefined) {
+                profileConditions.age.lte = ageMax;
+            }
+        }
+
+        // Gender filter
+        if (genderPreference && genderPreference !== 'all') {
+            profileConditions.gender = genderPreference;
+        }
+
+        // Add profile conditions if any exist
+        if (Object.keys(profileConditions).length > 0) {
+            whereConditions.profile = profileConditions;
+        }
 
         // Get profiles to show (excluding self and already swiped)
         // Fetch from normalized tables
         const users = await prisma.user.findMany({
-            where: {
-                id: {
-                    notIn: excludeIds.length > 0 ? excludeIds : [userId], // Handle empty array case
-                },
-            },
+            where: whereConditions,
             include: {
                 profile: true,
                 photos: { orderBy: { order: 'asc' } },
@@ -424,10 +453,32 @@ export const getSwipeProfiles = async (req: AuthRequest, res: Response): Promise
             take: 20, // Limit to 20 profiles at a time
         }) as any[];
 
-        // Map to frontend-compatible format
-        const profiles = users.map((user: any) => {
+        // Helper function to calculate distance between two coordinates (Haversine formula)
+        const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
+            const R = 6371; // Earth's radius in km
+            const dLat = (lat2 - lat1) * Math.PI / 180;
+            const dLon = (lon2 - lon1) * Math.PI / 180;
+            const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                Math.sin(dLon / 2) * Math.sin(dLon / 2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+            return R * c; // Distance in km
+        };
+
+        // Map to frontend-compatible format and apply distance filter
+        let profiles = users.map((user: any) => {
             const profilePhoto = user.photos?.find((p: any) => p.type === 'profile');
             const additionalPhotos = user.photos?.filter((p: any) => p.type === 'additional')?.map((p: any) => p.url) || [];
+
+            let distance: number | null = null;
+            if (userLat && userLon && user.profile?.latitude && user.profile?.longitude) {
+                distance = calculateDistance(
+                    userLat,
+                    userLon,
+                    user.profile.latitude,
+                    user.profile.longitude
+                );
+            }
 
             return {
                 id: user.id,
@@ -439,6 +490,7 @@ export const getSwipeProfiles = async (req: AuthRequest, res: Response): Promise
                 currentCity: user.profile?.currentCity,
                 latitude: user.profile?.latitude,
                 longitude: user.profile?.longitude,
+                distance,
                 isVerified: user.isVerified,
                 photo: profilePhoto?.url,
                 images: [profilePhoto?.url, ...additionalPhotos].filter(Boolean),
@@ -449,6 +501,14 @@ export const getSwipeProfiles = async (req: AuthRequest, res: Response): Promise
                 situationResponses: user.personalityResponses,
             };
         });
+
+        // Apply distance filter if specified
+        if (distanceMax !== undefined && userLat && userLon) {
+            profiles = profiles.filter(p => {
+                if (p.distance === null || p.distance === undefined) return false;
+                return p.distance <= distanceMax;
+            });
+        }
 
         console.log(`[getSwipeProfiles] Found ${profiles.length} profiles for user ${userId}`);
         if (profiles.length > 0) {
