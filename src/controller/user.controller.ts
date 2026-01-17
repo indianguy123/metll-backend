@@ -690,8 +690,8 @@ export const getUserProfile = async (req: AuthRequest, res: Response): Promise<v
     }
 
     // Build response matching frontend expectations
-    const profilePhoto = user.photos?.find(p => p.type === 'profile');
-    const additionalPhotos = user.photos?.filter(p => p.type === 'additional')?.map(p => p.url) || [];
+    const profilePhoto = (user as any).photos?.find((p: any) => p.type === 'profile');
+    const additionalPhotos = (user as any).photos?.filter((p: any) => p.type === 'additional')?.map((p: any) => p.url) || [];
 
     const responseUser = {
       id: user.id,
