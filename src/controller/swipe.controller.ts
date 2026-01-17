@@ -3,6 +3,20 @@ import prisma from '../config/database.config';
 import { AuthRequest } from '../types';
 import { extractPublicIdFromUrl, deleteResourcesFromCloudinary } from '../services/cloudinary.service';
 
+// Helper type for casting since generated Match types are missing relations
+interface MatchWithDetails {
+    id: number;
+    user1Id: number;
+    user2Id: number;
+    matchedAt: Date;
+    coffeeTicket: boolean;
+    coffeeTicketCafe: string | null;
+    coffeeTicketExpiry: Date | null;
+    user1: any;
+    user2: any;
+    chatRoom: any;
+}
+
 /**
  * Record a swipe action and check for mutual match
  * POST /api/swipe
@@ -104,15 +118,15 @@ export const recordSwipe = async (req: AuthRequest, res: Response): Promise<void
             const matchWithUser = await prisma.match.findUnique({
                 where: { id: existingMatch.id },
                 include: {
+                    chatRoom: true,
                     user1: {
                         select: {
                             id: true,
                             name: true,
                             images: true,
                             profilePhoto: true,
-                            bio: true,
-                            age: true,
                             isVerified: true,
+                            profile: { select: { bio: true, age: true } }
                         },
                     },
                     user2: {
@@ -121,14 +135,12 @@ export const recordSwipe = async (req: AuthRequest, res: Response): Promise<void
                             name: true,
                             images: true,
                             profilePhoto: true,
-                            bio: true,
-                            age: true,
                             isVerified: true,
+                            profile: { select: { bio: true, age: true } }
                         },
                     },
-                    chatRoom: true,
-                },
-            });
+                } as any,
+            }) as unknown as MatchWithDetails;
 
             const matchedUser = matchWithUser?.user1.id === userId
                 ? matchWithUser?.user2
@@ -161,15 +173,15 @@ export const recordSwipe = async (req: AuthRequest, res: Response): Promise<void
                 },
             },
             include: {
+                chatRoom: true,
                 user1: {
                     select: {
                         id: true,
                         name: true,
                         images: true,
                         profilePhoto: true,
-                        bio: true,
-                        age: true,
                         isVerified: true,
+                        profile: { select: { bio: true, age: true } }
                     },
                 },
                 user2: {
@@ -178,14 +190,12 @@ export const recordSwipe = async (req: AuthRequest, res: Response): Promise<void
                         name: true,
                         images: true,
                         profilePhoto: true,
-                        bio: true,
-                        age: true,
                         isVerified: true,
+                        profile: { select: { bio: true, age: true } }
                     },
                 },
-                chatRoom: true,
-            },
-        });
+            } as any,
+        }) as unknown as MatchWithDetails;
 
         const matchedUser = match.user1.id === userId ? match.user2 : match.user1;
 
@@ -232,7 +242,7 @@ export const getWhoLikedMe = async (req: AuthRequest, res: Response): Promise<vo
                 direction: 'like',
             },
             select: { swiperId: true, createdAt: true },
-        });
+        }) as any[];
 
         if (incomingLikes.length === 0) {
             res.status(200).json({
@@ -272,17 +282,14 @@ export const getWhoLikedMe = async (req: AuthRequest, res: Response): Promise<vo
             select: {
                 id: true,
                 name: true,
-                bio: true,
-                age: true,
-                gender: true,
+                profile: true,
                 images: true,
                 profilePhoto: true,
-                additionalPhotos: true,
                 isVerified: true,
                 school: true,
                 college: true,
                 office: true,
-            },
+            } as any,
         });
 
         // Add likedAt timestamp
@@ -403,14 +410,14 @@ export const getSwipeProfiles = async (req: AuthRequest, res: Response): Promise
                 college: true,
                 office: true,
                 personalityResponses: true,
-            },
+            } as any, // Cast include to any to avoid type errors
             take: 20, // Limit to 20 profiles at a time
-        });
+        }) as any[];
 
         // Map to frontend-compatible format
-        const profiles = users.map(user => {
-            const profilePhoto = user.photos?.find(p => p.type === 'profile');
-            const additionalPhotos = user.photos?.filter(p => p.type === 'additional')?.map(p => p.url) || [];
+        const profiles = users.map((user: any) => {
+            const profilePhoto = user.photos?.find((p: any) => p.type === 'profile');
+            const additionalPhotos = user.photos?.filter((p: any) => p.type === 'additional')?.map((p: any) => p.url) || [];
 
             return {
                 id: user.id,
@@ -494,9 +501,8 @@ export const getMatches = async (req: AuthRequest, res: Response): Promise<void>
                         name: true,
                         images: true,
                         profilePhoto: true,
-                        bio: true,
-                        age: true,
                         isVerified: true,
+                        profile: { select: { bio: true, age: true } }
                     },
                 },
                 user2: {
@@ -505,9 +511,8 @@ export const getMatches = async (req: AuthRequest, res: Response): Promise<void>
                         name: true,
                         images: true,
                         profilePhoto: true,
-                        bio: true,
-                        age: true,
                         isVerified: true,
+                        profile: { select: { bio: true, age: true } }
                     },
                 },
                 chatRoom: {
@@ -518,9 +523,9 @@ export const getMatches = async (req: AuthRequest, res: Response): Promise<void>
                         },
                     },
                 },
-            },
+            } as any,
             orderBy: { matchedAt: 'desc' },
-        });
+        }) as unknown as MatchWithDetails[];
 
         // Transform to show matched user and last message
         const formattedMatches = matches.map((match) => {
@@ -588,9 +593,8 @@ export const getMatchById = async (req: AuthRequest, res: Response): Promise<voi
                         name: true,
                         images: true,
                         profilePhoto: true,
-                        bio: true,
-                        age: true,
                         isVerified: true,
+                        profile: { select: { bio: true, age: true } }
                     },
                 },
                 user2: {
@@ -599,14 +603,13 @@ export const getMatchById = async (req: AuthRequest, res: Response): Promise<voi
                         name: true,
                         images: true,
                         profilePhoto: true,
-                        bio: true,
-                        age: true,
                         isVerified: true,
+                        profile: { select: { bio: true, age: true } }
                     },
                 },
                 chatRoom: true,
-            },
-        });
+            } as any,
+        }) as unknown as MatchWithDetails;
 
         if (!match) {
             res.status(404).json({ success: false, message: 'Match not found.' });

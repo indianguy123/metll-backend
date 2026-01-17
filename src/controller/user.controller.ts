@@ -1,6 +1,5 @@
 import { Response } from 'express';
 import prisma from '../config/database.config';
-import { Prisma } from '@prisma/client';
 import { AuthRequest } from '../types';
 import {
   uploadImageToCloudinary,
@@ -10,13 +9,6 @@ import {
 } from '../services/cloudinary.service';
 
 // Type definitions for profile data
-
-
-interface LocationInfo {
-  address?: string;
-  city?: string;
-  state?: string;
-}
 
 
 // SituationResponse type (used for documentation/reference)
@@ -195,7 +187,6 @@ export const uploadProfilePicture = async (req: AuthRequest, res: Response): Pro
           where: { id: existingPhoto.id },
           data: {
             url: uploadResult.url,
-            publicId: uploadResult.publicId,
             publicId: uploadResult.publicId,
           },
         });

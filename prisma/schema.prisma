@@ -39,12 +39,14 @@ model User {
   rewardsUsed    Int @default(0)
   referralStatus String @default("active")
 
-  // Denormalized fields for performance & simplified access
   profilePhoto       String?
+  profilePhotoPublicId String?
   images             String[] @default([])
   verificationStatus String   @default("pending") // pending, photo_uploaded, verified, failed
   verificationScore  Float?
   verificationDate   DateTime?
+  livenessSessionId  String?
+  faceId             String?
 
   // Relations to new normalized tables
   profile              UserProfile?
