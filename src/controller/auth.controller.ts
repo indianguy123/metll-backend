@@ -336,8 +336,8 @@ export const verifyOTP = async (req: AuthRequest, res: Response): Promise<void> 
     const profile = updatedUser.profile;
     const photos = updatedUser.photos || [];
     const verification = updatedUser.verification;
-    const profilePhoto = photos.find((p: any) => p.isProfilePhoto)?.url || null;
-    const additionalPhotos = photos.filter((p: any) => !p.isProfilePhoto).map((p: any) => p.url);
+    const profilePhoto = photos.find((p: any) => p.type === 'profile')?.url || null;
+    const additionalPhotos = photos.filter((p: any) => p.type === 'additional').map((p: any) => p.url);
 
     const userResponse = {
       id: updatedUser.id,
@@ -468,8 +468,8 @@ export const login = async (req: AuthRequest, res: Response): Promise<void> => {
     const profile = user.profile;
     const photos = user.photos || [];
     const verification = user.verification;
-    const profilePhoto = photos.find((p: any) => p.isProfilePhoto)?.url || null;
-    const additionalPhotos = photos.filter((p: any) => !p.isProfilePhoto).map((p: any) => p.url);
+    const profilePhoto = photos.find((p: any) => p.type === 'profile')?.url || null;
+    const additionalPhotos = photos.filter((p: any) => p.type === 'additional').map((p: any) => p.url);
 
     const userResponse = {
       id: user.id,
@@ -660,8 +660,8 @@ export const getProfile = async (req: AuthRequest, res: Response): Promise<void>
     const profile = user.profile;
     const photos = user.photos || [];
     const verification = user.verification;
-    const profilePhoto = photos.find((p: any) => p.isProfilePhoto)?.url || null;
-    const additionalPhotos = photos.filter((p: any) => !p.isProfilePhoto).map((p: any) => p.url);
+    const profilePhoto = photos.find((p: any) => p.type === 'profile')?.url || null;
+    const additionalPhotos = photos.filter((p: any) => p.type === 'additional').map((p: any) => p.url);
 
     const userResponse = {
       id: user.id,
@@ -834,8 +834,8 @@ export const updateProfile = async (req: AuthRequest, res: Response): Promise<vo
     const profile = updatedUser?.profile;
     const photos = updatedUser?.photos || [];
     const verification = updatedUser?.verification;
-    const profilePhoto = photos.find((p: any) => p.isProfilePhoto)?.url || null;
-    const additionalPhotos = photos.filter((p: any) => !p.isProfilePhoto).map((p: any) => p.url);
+    const profilePhoto = photos.find((p: any) => p.type === 'profile')?.url || null;
+    const additionalPhotos = photos.filter((p: any) => p.type === 'additional').map((p: any) => p.url);
 
     const userResponse = {
       id: updatedUser?.id,
