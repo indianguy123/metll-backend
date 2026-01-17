@@ -12,6 +12,9 @@ import {
   updateOffice,
   updateHomeLocation,
   deleteAccount,
+  saveDatingPreferences,
+  completeDiscoverOnboarding,
+  getDatingPreferences,
 } from '../controller/user.controller';
 import { protect } from '../middleware/auth.middleware';
 import {
@@ -49,6 +52,11 @@ router.put('/school', updateSchool);
 router.put('/college', updateCollege);
 router.put('/office', updateOffice);
 router.put('/home-location', updateHomeLocation);
+
+// Dating preferences (discover onboarding)
+router.get('/dating-preferences', getDatingPreferences);
+router.post('/dating-preferences', saveDatingPreferences);
+router.post('/complete-discover-onboarding', completeDiscoverOnboarding);
 
 // Account deletion
 router.delete('/account', deleteAccount);

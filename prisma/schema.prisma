@@ -13,61 +13,43 @@ model User {
   email          String?
   password       String
   name           String?
-  bio            String?
-  age            Int?
-  gender         String?
-  latitude       Float?
-  longitude      Float?
-  images         String[] @default([])
-  imagePublicIds String[] @default([])
-  isVerified     Boolean  @default(false)
-  isOnboarded    Boolean  @default(false) // Set to true after user completes onboarding (uploads verification video)
-
-  // Additional Photos (Cloudinary URLs)
-  additionalPhotos   String[] @default([])
-  additionalPhotoIds String[] @default([]) // Cloudinary public IDs
-
-  // Verification Video
-  verificationVideo   String? // Cloudinary URL
-  verificationVideoId String? // Cloudinary public ID
-
-  // Face Verification Fields
-  profilePhoto         String? // Primary profile photo URL (Cloudinary)
-  profilePhotoPublicId String? // Cloudinary public ID for profile photo
-  faceId               String? // AWS Rekognition FaceId (for face collection if used)
-  verificationStatus   String? // 'pending', 'photo_uploaded', 'liveness_pending', 'verified', 'failed'
-  verificationScore    Float? // 0-100 similarity score from face comparison
-  verificationDate     DateTime?
-  livenessSessionId    String? // Session ID for liveness verification
-
-  // Location/Background Info (stored as JSON)
-  school       Json? // { name, location, city, state, class, section }
-  college      Json? // { name, department, location }
-  office       Json? // { name, department, designation, location }
-  homeLocation Json? // { current: { address, city, state }, past: { address, city, state } }
-
-  // Personality Questions (stored as JSON array)
-  situationResponses Json? // [{ questionId, answer, answeredAt }]
-
+  
+  // Core status flags
+  isVerified           Boolean  @default(false)
+  isOnboarded          Boolean  @default(false)  // Phase 1 complete
+  isDiscoverOnboarded  Boolean  @default(false)  // Phase 2 complete
+  
+  // OTP fields
   otp           String?
   otpExpiresAt  DateTime?
   otpAttempts   Int       @default(0)
   lastOtpSentAt DateTime?
+  
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
   // Referral System
-  referralCode String @unique @default(cuid()) // Unique code for this user
-  referredById Int? // Who referred this user
+  referralCode String @unique @default(cuid())
+  referredById Int?
   referredBy   User?  @relation("Referrals", fields: [referredById], references: [id])
-  referrals    User[] @relation("Referrals") // Users this user referred
+  referrals    User[] @relation("Referrals")
 
-  totalReferrals Int @default(0) // Count of successful referrals
-  rewardsEarned  Int @default(0) // Number of coffee dates earned
-  rewardsUsed    Int @default(0) // Number of coffee dates used
+  totalReferrals Int @default(0)
+  rewardsEarned  Int @default(0)
+  rewardsUsed    Int @default(0)
+  referralStatus String @default("active")
 
-  referralStatus String @default("active") // "active", "suspended"
-
+  // Relations to new normalized tables
+  profile              UserProfile?
+  datingPrefs          DatingPreferences?
+  photos               UserPhoto[]
+  verification         UserVerification?
+  personalityResponses PersonalityResponse[]
+  school               UserSchool?
+  college              UserCollege?
+  office               UserOffice?
+  
+  // Existing relations
   rewards         Reward[]   @relation("UserRewards")
   referralRecords Referral[] @relation("ReferrerRecords")
   referredRecords Referral[] @relation("ReferredUserRecords")
@@ -76,18 +58,169 @@ model User {
   matchesAsUser1 Match[]      @relation("User1Matches")
   matchesAsUser2 Match[]      @relation("User2Matches")
 
-  // Swipe relations
   swipesMade     Swipe[] @relation("SwipesMade")
   swipesReceived Swipe[] @relation("SwipesReceived")
 
-  // Chat relations
   messages Message[]
 
   reportsMade     Report[] @relation("ReportsMade")
   reportsReceived Report[] @relation("ReportsReceived")
 
   @@index([isVerified])
-  @@index([verificationStatus])
+  @@index([isOnboarded])
+  @@index([isDiscoverOnboarded])
+}
+
+// ==========================================
+// Profile & Background Tables
+// ==========================================
+
+model UserProfile {
+  id        Int    @id @default(autoincrement())
+  userId    Int    @unique
+  user      User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  bio       String?
+  age       Int?
+  gender    String?  // male, female, non-binary, other
+  height    Int?     // in cm
+  
+  // Location
+  latitude    Float?
+  longitude   Float?
+  currentCity String?
+  pastCity    String?
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@index([gender])
+  @@index([currentCity])
+}
+
+model UserSchool {
+  id        Int    @id @default(autoincrement())
+  userId    Int    @unique
+  user      User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name      String
+  city      String?
+  state     String?
+  class     String?
+  section   String?
+}
+
+model UserCollege {
+  id         Int    @id @default(autoincrement())
+  userId     Int    @unique
+  user       User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name       String
+  department String?
+  location   String?
+}
+
+model UserOffice {
+  id          Int    @id @default(autoincrement())
+  userId      Int    @unique
+  user        User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name        String
+  designation String?
+  department  String?
+  location    String?
+}
+
+// ==========================================
+// Photos Table
+// ==========================================
+
+model UserPhoto {
+  id        Int     @id @default(autoincrement())
+  userId    Int
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  url       String
+  publicId  String  // Cloudinary public ID
+  type      String  // 'profile', 'additional'
+  order     Int     @default(0)
+  
+  createdAt DateTime @default(now())
+  
+  @@index([userId, type])
+  @@index([userId, order])
+}
+
+// ==========================================
+// Verification Table
+// ==========================================
+
+model UserVerification {
+  id              Int      @id @default(autoincrement())
+  userId          Int      @unique
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  videoUrl        String?
+  videoPublicId   String?
+  faceId          String?  // AWS Rekognition
+  status          String   @default("pending") // pending, photo_uploaded, verified, failed
+  score           Float?   // 0-100 similarity
+  verifiedAt      DateTime?
+  livenessSession String?
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@index([status])
+}
+
+// ==========================================
+// Dating Preferences Table
+// ==========================================
+
+model DatingPreferences {
+  id     Int  @id @default(autoincrement())
+  userId Int  @unique
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Relationship Type
+  relationshipType String @default("open_to_all") 
+  // Options: friends_first, monogamy, non_monogamy, open_to_all, figuring_out
+  
+  // Dating Intention
+  datingIntention String @default("open_to_all")
+  // Options: casual, serious, marriage, open_to_all
+  
+  // Preferences (who to show)
+  genderPreference   String[] @default(["all"]) // male, female, non-binary, all
+  ageMin             Int      @default(18)
+  ageMax             Int      @default(50)
+  distanceMax        Int      @default(50) // km
+  
+  // Lifestyle
+  children      String? // have, want, dont_want, open
+  familyPlans   String? // want, dont_want, open
+  smoking       String? // never, sometimes, regularly, prefer_not_say
+  drinking      String? // never, socially, regularly, prefer_not_say
+  drugs         String? // never, sometimes, prefer_not_say
+  politics      String? // liberal, moderate, conservative, prefer_not_say
+  education     String? // high_school, bachelors, masters, doctorate, prefer_not_say
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ==========================================
+// Personality Responses Table
+// ==========================================
+
+model PersonalityResponse {
+  id         Int      @id @default(autoincrement())
+  userId     Int
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  questionId Int
+  answer     String
+  answeredAt DateTime @default(now())
+  
+  @@unique([userId, questionId])
+  @@index([userId])
 }
 
 model Report {

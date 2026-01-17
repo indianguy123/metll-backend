@@ -53,6 +53,8 @@ interface HomeLocation {
 /**
  * Update user profile with all profile data
  * PUT /api/user/profile
+ * 
+ * Now uses normalized tables: UserProfile for profile data
  */
 export const updateUserProfile = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
@@ -74,86 +76,72 @@ export const updateUserProfile = async (req: AuthRequest, res: Response): Promis
       email,
       latitude,
       longitude,
-      photo,
-      school,
-      college,
-      office,
-      homeLocation,
-      situationResponses,
-      additionalPhotos,
-      verificationVideo,
+      height,
+      currentCity,
+      pastCity,
     } = req.body;
 
-    // Build update data object
-    const updateData: any = {
-      updatedAt: new Date(),
-    };
+    // Update User table (only name and email)
+    const userUpdateData: any = { updatedAt: new Date() };
+    if (name !== undefined) userUpdateData.name = name;
+    if (email !== undefined) userUpdateData.email = email;
 
-    // Basic profile fields
-    if (name !== undefined) updateData.name = name;
-    if (bio !== undefined) updateData.bio = bio;
-    if (age !== undefined) updateData.age = parseInt(age) || null;
-    if (gender !== undefined) updateData.gender = gender;
-    if (email !== undefined) updateData.email = email;
-    if (latitude !== undefined) updateData.latitude = parseFloat(latitude) || null;
-    if (longitude !== undefined) updateData.longitude = parseFloat(longitude) || null;
-    
-    // Main profile photo (Cloudinary URL)
-    if (photo !== undefined) updateData.profilePhoto = photo;
-
-    // JSON fields (school, college, office, homeLocation)
-    if (school !== undefined) updateData.school = school;
-    if (college !== undefined) updateData.college = college;
-    if (office !== undefined) updateData.office = office;
-    if (homeLocation !== undefined) updateData.homeLocation = homeLocation;
-    if (situationResponses !== undefined) updateData.situationResponses = situationResponses;
-
-    // Additional photos (Cloudinary URLs)
-    if (additionalPhotos !== undefined) {
-      if (Array.isArray(additionalPhotos)) {
-        updateData.additionalPhotos = additionalPhotos;
-      }
-    }
-
-    // Verification video (Cloudinary URL)
-    if (verificationVideo !== undefined) {
-      updateData.verificationVideo = verificationVideo;
-    }
-
-    // Update user
-    const updatedUser = await prisma.user.update({
+    await prisma.user.update({
       where: { id: userId },
-      data: updateData,
-      select: {
-        id: true,
-        phoneNumber: true,
-        email: true,
-        name: true,
-        bio: true,
-        age: true,
-        gender: true,
-        latitude: true,
-        longitude: true,
-        images: true,
-        profilePhoto: true,
-        additionalPhotos: true,
-        verificationVideo: true,
-        isVerified: true,
-        verificationStatus: true,
-        school: true,
-        college: true,
-        office: true,
-        homeLocation: true,
-        situationResponses: true,
-        createdAt: true,
-        updatedAt: true,
+      data: userUpdateData,
+    });
+
+    // Update or create UserProfile
+    const profileData: any = {};
+    if (bio !== undefined) profileData.bio = bio;
+    if (age !== undefined) profileData.age = parseInt(age) || null;
+    if (gender !== undefined) profileData.gender = gender;
+    if (height !== undefined) profileData.height = parseInt(height) || null;
+    if (latitude !== undefined) profileData.latitude = parseFloat(latitude) || null;
+    if (longitude !== undefined) profileData.longitude = parseFloat(longitude) || null;
+    if (currentCity !== undefined) profileData.currentCity = currentCity;
+    if (pastCity !== undefined) profileData.pastCity = pastCity;
+
+    if (Object.keys(profileData).length > 0) {
+      await prisma.userProfile.upsert({
+        where: { userId },
+        update: { ...profileData, updatedAt: new Date() },
+        create: { userId, ...profileData },
+      });
+    }
+
+    // Fetch updated user with profile
+    const updatedUser = await prisma.user.findUnique({
+      where: { id: userId },
+      include: {
+        profile: true,
+        photos: { orderBy: { order: 'asc' } },
+        verification: true,
+        datingPrefs: true,
       },
     });
 
-    // Map profilePhoto to photo for frontend compatibility
+    // Build response matching frontend expectations
+    const profilePhoto = updatedUser?.photos?.find(p => p.type === 'profile');
+    const additionalPhotos = updatedUser?.photos?.filter(p => p.type === 'additional')?.map(p => p.url) || [];
+
     const responseUser = {
-      ...updatedUser,
-      photo: updatedUser.profilePhoto,
+      id: updatedUser?.id,
+      phoneNumber: updatedUser?.phoneNumber,
+      email: updatedUser?.email,
+      name: updatedUser?.name,
+      bio: updatedUser?.profile?.bio,
+      age: updatedUser?.profile?.age,
+      gender: updatedUser?.profile?.gender,
+      height: updatedUser?.profile?.height,
+      currentCity: updatedUser?.profile?.currentCity,
+      photo: profilePhoto?.url,
+      additionalPhotos,
+      isVerified: updatedUser?.isVerified,
+      isOnboarded: updatedUser?.isOnboarded,
+      isDiscoverOnboarded: updatedUser?.isDiscoverOnboarded,
+      createdAt: updatedUser?.createdAt,
+      updatedAt: updatedUser?.updatedAt,
     };
 
     res.status(200).json({
@@ -175,10 +163,7 @@ export const updateUserProfile = async (req: AuthRequest, res: Response): Promis
  * Upload profile picture (initial profile photo - first step of onboarding)
  * POST /api/user/profile-picture
  * 
- * Flow:
- * 1. Upload image to Cloudinary
- * 2. Update database with new photo URL
- * 3. Return success only if both steps complete
+ * Now uses UserPhoto table instead of User fields
  */
 export const uploadProfilePicture = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
@@ -203,9 +188,8 @@ export const uploadProfilePicture = async (req: AuthRequest, res: Response): Pro
     }
 
     // Get current profile photo to delete later
-    const currentUser = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { profilePhotoPublicId: true },
+    const existingPhoto = await prisma.userPhoto.findFirst({
+      where: { userId, type: 'profile' },
     });
 
     // Step 1: Upload to Cloudinary
@@ -226,25 +210,35 @@ export const uploadProfilePicture = async (req: AuthRequest, res: Response): Pro
       return;
     }
 
-    // Step 2: Update database with new photo URL
+    // Step 2: Create or update photo in UserPhoto table
     try {
-      const updatedUser = await prisma.user.update({
-        where: { id: userId },
-        data: {
-          profilePhoto: uploadResult.url,
-          profilePhotoPublicId: uploadResult.publicId,
-        },
-        select: {
-          id: true,
-          profilePhoto: true,
-          name: true,
-        },
-      });
-
-      // Delete old profile photo from Cloudinary (if exists) - non-blocking
-      if (currentUser?.profilePhotoPublicId) {
-        deleteImageFromCloudinary(currentUser.profilePhotoPublicId).catch(err => {
-          console.error('Failed to delete old profile photo:', err);
+      let photoRecord;
+      if (existingPhoto) {
+        // Update existing profile photo
+        photoRecord = await prisma.userPhoto.update({
+          where: { id: existingPhoto.id },
+          data: {
+            url: uploadResult.url,
+            publicId: uploadResult.publicId,
+            updatedAt: new Date(),
+          },
+        });
+        // Delete old photo from Cloudinary - non-blocking
+        if (existingPhoto.publicId) {
+          deleteImageFromCloudinary(existingPhoto.publicId).catch(err => {
+            console.error('Failed to delete old profile photo:', err);
+          });
+        }
+      } else {
+        // Create new profile photo
+        photoRecord = await prisma.userPhoto.create({
+          data: {
+            userId,
+            url: uploadResult.url,
+            publicId: uploadResult.publicId,
+            type: 'profile',
+            order: 0,
+          },
         });
       }
 
@@ -252,12 +246,11 @@ export const uploadProfilePicture = async (req: AuthRequest, res: Response): Pro
         success: true,
         message: 'Profile picture uploaded successfully',
         data: {
-          photo: updatedUser.profilePhoto,
-          userId: updatedUser.id,
+          photo: photoRecord.url,
+          userId,
         },
       });
     } catch (dbError: any) {
-      // Database update failed - try to clean up the uploaded image
       console.error('Database update failed:', dbError);
       deleteImageFromCloudinary(uploadResult.publicId).catch(err => {
         console.error('Failed to cleanup uploaded image:', err);
@@ -283,6 +276,8 @@ export const uploadProfilePicture = async (req: AuthRequest, res: Response): Pro
 /**
  * Upload additional photos
  * POST /api/user/photos
+ * 
+ * Now uses UserPhoto table
  */
 export const uploadAdditionalPhotos = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
@@ -306,27 +301,23 @@ export const uploadAdditionalPhotos = async (req: AuthRequest, res: Response): P
       return;
     }
 
-    // Get current user's photos
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { additionalPhotos: true, additionalPhotoIds: true },
+    // Get current photos count
+    const existingPhotos = await prisma.userPhoto.findMany({
+      where: { userId, type: 'additional' },
     });
 
-    const currentPhotos = user?.additionalPhotos || [];
-    const currentPhotoIds = user?.additionalPhotoIds || [];
-
     // Check photo limit (max 10 additional photos)
-    if (currentPhotos.length + files.length > 10) {
+    if (existingPhotos.length + files.length > 10) {
       res.status(400).json({
         success: false,
-        message: `Cannot upload more than 10 additional photos. You have ${currentPhotos.length} photos.`,
+        message: `Cannot upload more than 10 additional photos. You have ${existingPhotos.length} photos.`,
       });
       return;
     }
 
-    // Upload to Cloudinary
+    // Upload to Cloudinary and create UserPhoto records
     const uploadedPhotos: string[] = [];
-    const uploadedPhotoIds: string[] = [];
+    let nextOrder = existingPhotos.length > 0 ? Math.max(...existingPhotos.map(p => p.order)) + 1 : 1;
 
     for (const file of files) {
       const result = await uploadImageToCloudinary(
@@ -334,21 +325,24 @@ export const uploadAdditionalPhotos = async (req: AuthRequest, res: Response): P
         userId,
         'additional'
       );
+
+      await prisma.userPhoto.create({
+        data: {
+          userId,
+          url: result.url,
+          publicId: result.publicId,
+          type: 'additional',
+          order: nextOrder++,
+        },
+      });
+
       uploadedPhotos.push(result.url);
-      uploadedPhotoIds.push(result.publicId);
     }
 
-    // Update user
-    const updatedUser = await prisma.user.update({
-      where: { id: userId },
-      data: {
-        additionalPhotos: [...currentPhotos, ...uploadedPhotos],
-        additionalPhotoIds: [...currentPhotoIds, ...uploadedPhotoIds],
-      },
-      select: {
-        id: true,
-        additionalPhotos: true,
-      },
+    // Get all photos for response
+    const allPhotos = await prisma.userPhoto.findMany({
+      where: { userId, type: 'additional' },
+      orderBy: { order: 'asc' },
     });
 
     res.status(200).json({
@@ -356,7 +350,7 @@ export const uploadAdditionalPhotos = async (req: AuthRequest, res: Response): P
       message: 'Photos uploaded successfully',
       data: {
         uploadedUrls: uploadedPhotos,
-        allPhotos: updatedUser.additionalPhotos,
+        allPhotos: allPhotos.map(p => p.url),
       },
     });
   } catch (error: any) {
@@ -372,6 +366,8 @@ export const uploadAdditionalPhotos = async (req: AuthRequest, res: Response): P
 /**
  * Delete an additional photo
  * DELETE /api/user/photos/:index
+ * 
+ * Now uses UserPhoto table
  */
 export const deleteAdditionalPhoto = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
@@ -394,13 +390,13 @@ export const deleteAdditionalPhoto = async (req: AuthRequest, res: Response): Pr
       return;
     }
 
-    // Get current photos
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { additionalPhotos: true, additionalPhotoIds: true },
+    // Get photos sorted by order
+    const photos = await prisma.userPhoto.findMany({
+      where: { userId, type: 'additional' },
+      orderBy: { order: 'asc' },
     });
 
-    if (!user || photoIndex >= (user.additionalPhotos?.length || 0)) {
+    if (photoIndex >= photos.length) {
       res.status(404).json({
         success: false,
         message: 'Photo not found',
@@ -408,33 +404,28 @@ export const deleteAdditionalPhoto = async (req: AuthRequest, res: Response): Pr
       return;
     }
 
+    const photoToDelete = photos[photoIndex];
+
     // Delete from Cloudinary
-    const photoIdToDelete = user.additionalPhotoIds?.[photoIndex];
-    if (photoIdToDelete) {
-      await deleteImagesFromCloudinary([photoIdToDelete]);
+    if (photoToDelete.publicId) {
+      await deleteImagesFromCloudinary([photoToDelete.publicId]);
     }
 
-    // Remove from arrays
-    const newPhotos = user.additionalPhotos.filter((_, i) => i !== photoIndex);
-    const newPhotoIds = (user.additionalPhotoIds || []).filter((_, i) => i !== photoIndex);
+    // Delete from database
+    await prisma.userPhoto.delete({
+      where: { id: photoToDelete.id },
+    });
 
-    // Update user
-    const updatedUser = await prisma.user.update({
-      where: { id: userId },
-      data: {
-        additionalPhotos: newPhotos,
-        additionalPhotoIds: newPhotoIds,
-      },
-      select: {
-        id: true,
-        additionalPhotos: true,
-      },
+    // Get remaining photos
+    const remainingPhotos = await prisma.userPhoto.findMany({
+      where: { userId, type: 'additional' },
+      orderBy: { order: 'asc' },
     });
 
     res.status(200).json({
       success: true,
       message: 'Photo deleted successfully',
-      data: { photos: updatedUser.additionalPhotos },
+      data: { photos: remainingPhotos.map(p => p.url) },
     });
   } catch (error: any) {
     console.error('Delete photo error:', error);
@@ -449,6 +440,8 @@ export const deleteAdditionalPhoto = async (req: AuthRequest, res: Response): Pr
 /**
  * Upload verification video
  * POST /api/user/verification-video
+ * 
+ * Now uses UserVerification table
  */
 export const uploadVerificationVideo = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
@@ -472,15 +465,14 @@ export const uploadVerificationVideo = async (req: AuthRequest, res: Response): 
       return;
     }
 
-    // Get current verification video to delete
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { verificationVideoId: true },
+    // Get current verification record
+    const existingVerification = await prisma.userVerification.findUnique({
+      where: { userId },
     });
 
     // Delete old video if exists
-    if (user?.verificationVideoId) {
-      await deleteImagesFromCloudinary([user.verificationVideoId]);
+    if (existingVerification?.videoPublicId) {
+      await deleteImagesFromCloudinary([existingVerification.videoPublicId]);
     }
 
     // Upload to Cloudinary
@@ -490,25 +482,33 @@ export const uploadVerificationVideo = async (req: AuthRequest, res: Response): 
       'verification'
     );
 
-    // Update user and mark as onboarded (verification video is the final onboarding step)
-    const updatedUser = await prisma.user.update({
+    // Create or update verification record
+    await prisma.userVerification.upsert({
+      where: { userId },
+      update: {
+        videoUrl: result.url,
+        videoPublicId: result.publicId,
+        status: 'pending',
+        updatedAt: new Date(),
+      },
+      create: {
+        userId,
+        videoUrl: result.url,
+        videoPublicId: result.publicId,
+        status: 'pending',
+      },
+    });
+
+    // Mark user as onboarded (verification video is the final onboarding step)
+    await prisma.user.update({
       where: { id: userId },
-      data: {
-        verificationVideo: result.url,
-        verificationVideoId: result.publicId,
-        isOnboarded: true,  // Mark user as fully onboarded
-      },
-      select: {
-        id: true,
-        verificationVideo: true,
-        isOnboarded: true,
-      },
+      data: { isOnboarded: true },
     });
 
     res.status(200).json({
       success: true,
       message: 'Verification video uploaded successfully',
-      data: { videoUrl: updatedUser.verificationVideo },
+      data: { videoUrl: result.url },
     });
   } catch (error: any) {
     console.error('Upload verification video error:', error);
@@ -523,6 +523,8 @@ export const uploadVerificationVideo = async (req: AuthRequest, res: Response): 
 /**
  * Update situation responses (personality questions)
  * PUT /api/user/situation-responses
+ * 
+ * Now uses PersonalityResponse table
  */
 export const updateSituationResponses = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
@@ -546,29 +548,28 @@ export const updateSituationResponses = async (req: AuthRequest, res: Response):
       return;
     }
 
-    // Validate response structure
-    const validatedResponses = responses.map((r: any) => ({
-      questionId: parseInt(r.questionId),
-      answer: String(r.answer),
-      answeredAt: r.answeredAt || new Date().toISOString(),
-    }));
-
-    // Update user
-    const updatedUser = await prisma.user.update({
-      where: { id: userId },
-      data: {
-        situationResponses: validatedResponses as Prisma.InputJsonValue,
-      },
-      select: {
-        id: true,
-        situationResponses: true,
-      },
+    // Delete existing responses and insert new ones
+    await prisma.personalityResponse.deleteMany({
+      where: { userId },
     });
+
+    // Create new responses
+    const createdResponses = await Promise.all(
+      responses.map((r: any) =>
+        prisma.personalityResponse.create({
+          data: {
+            userId,
+            questionId: String(r.questionId),
+            answer: String(r.answer),
+          },
+        })
+      )
+    );
 
     res.status(200).json({
       success: true,
       message: 'Situation responses updated successfully',
-      data: { situationResponses: updatedUser.situationResponses },
+      data: { situationResponses: createdResponses },
     });
   } catch (error: any) {
     console.error('Update situation responses error:', error);
@@ -583,6 +584,8 @@ export const updateSituationResponses = async (req: AuthRequest, res: Response):
 /**
  * Get user profile
  * GET /api/user/profile
+ * 
+ * Now builds from normalized tables
  */
 export const getUserProfile = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
@@ -596,31 +599,18 @@ export const getUserProfile = async (req: AuthRequest, res: Response): Promise<v
       return;
     }
 
+    // Fetch user with all related data
     const user = await prisma.user.findUnique({
       where: { id: userId },
-      select: {
-        id: true,
-        phoneNumber: true,
-        email: true,
-        name: true,
-        bio: true,
-        age: true,
-        gender: true,
-        latitude: true,
-        longitude: true,
-        images: true,
-        profilePhoto: true,
-        additionalPhotos: true,
-        verificationVideo: true,
-        isVerified: true,
-        verificationStatus: true,
+      include: {
+        profile: true,
+        photos: { orderBy: { order: 'asc' } },
+        verification: true,
+        datingPrefs: true,
         school: true,
         college: true,
         office: true,
-        homeLocation: true,
-        situationResponses: true,
-        createdAt: true,
-        updatedAt: true,
+        personalityResponses: true,
       },
     });
 
@@ -632,10 +622,37 @@ export const getUserProfile = async (req: AuthRequest, res: Response): Promise<v
       return;
     }
 
-    // Map profilePhoto to photo for frontend compatibility
+    // Build response matching frontend expectations
+    const profilePhoto = user.photos?.find(p => p.type === 'profile');
+    const additionalPhotos = user.photos?.filter(p => p.type === 'additional')?.map(p => p.url) || [];
+
     const responseUser = {
-      ...user,
-      photo: user.profilePhoto,
+      id: user.id,
+      phoneNumber: user.phoneNumber,
+      email: user.email,
+      name: user.name,
+      bio: user.profile?.bio,
+      age: user.profile?.age,
+      gender: user.profile?.gender,
+      height: user.profile?.height,
+      currentCity: user.profile?.currentCity,
+      pastCity: user.profile?.pastCity,
+      latitude: user.profile?.latitude,
+      longitude: user.profile?.longitude,
+      photo: profilePhoto?.url,
+      additionalPhotos,
+      verificationVideo: user.verification?.videoUrl,
+      isVerified: user.isVerified,
+      isOnboarded: user.isOnboarded,
+      isDiscoverOnboarded: user.isDiscoverOnboarded,
+      school: user.school,
+      college: user.college,
+      office: user.office,
+      homeLocation: user.profile?.currentCity ? { city: user.profile.currentCity } : null,
+      situationResponses: user.personalityResponses,
+      datingPrefs: user.datingPrefs,
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt,
     };
 
     res.status(200).json({
@@ -655,6 +672,8 @@ export const getUserProfile = async (req: AuthRequest, res: Response): Promise<v
 /**
  * Update school info
  * PUT /api/user/school
+ * 
+ * Now uses UserSchool table
  */
 export const updateSchool = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
@@ -668,18 +687,18 @@ export const updateSchool = async (req: AuthRequest, res: Response): Promise<voi
       return;
     }
 
-    const schoolData = req.body as SchoolInfo;
+    const { name, city, state, class: schoolClass, section } = req.body;
 
-    const updatedUser = await prisma.user.update({
-      where: { id: userId },
-      data: { school: schoolData as Prisma.InputJsonValue },
-      select: { id: true, school: true },
+    const school = await prisma.userSchool.upsert({
+      where: { userId },
+      update: { name, city, state, class: schoolClass, section },
+      create: { userId, name, city, state, class: schoolClass, section },
     });
 
     res.status(200).json({
       success: true,
       message: 'School info updated successfully',
-      data: { school: updatedUser.school },
+      data: { school },
     });
   } catch (error: any) {
     console.error('Update school error:', error);
@@ -694,6 +713,8 @@ export const updateSchool = async (req: AuthRequest, res: Response): Promise<voi
 /**
  * Update college info
  * PUT /api/user/college
+ * 
+ * Now uses UserCollege table
  */
 export const updateCollege = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
@@ -707,18 +728,18 @@ export const updateCollege = async (req: AuthRequest, res: Response): Promise<vo
       return;
     }
 
-    const collegeData = req.body as CollegeInfo;
+    const { name, department, location } = req.body;
 
-    const updatedUser = await prisma.user.update({
-      where: { id: userId },
-      data: { college: collegeData as Prisma.InputJsonValue },
-      select: { id: true, college: true },
+    const college = await prisma.userCollege.upsert({
+      where: { userId },
+      update: { name, department, location },
+      create: { userId, name, department, location },
     });
 
     res.status(200).json({
       success: true,
       message: 'College info updated successfully',
-      data: { college: updatedUser.college },
+      data: { college },
     });
   } catch (error: any) {
     console.error('Update college error:', error);
@@ -733,6 +754,8 @@ export const updateCollege = async (req: AuthRequest, res: Response): Promise<vo
 /**
  * Update office info
  * PUT /api/user/office
+ * 
+ * Now uses UserOffice table
  */
 export const updateOffice = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
@@ -746,18 +769,18 @@ export const updateOffice = async (req: AuthRequest, res: Response): Promise<voi
       return;
     }
 
-    const officeData = req.body as OfficeInfo;
+    const { name, designation, department, location } = req.body;
 
-    const updatedUser = await prisma.user.update({
-      where: { id: userId },
-      data: { office: officeData as Prisma.InputJsonValue },
-      select: { id: true, office: true },
+    const office = await prisma.userOffice.upsert({
+      where: { userId },
+      update: { name, designation, department, location },
+      create: { userId, name, designation, department, location },
     });
 
     res.status(200).json({
       success: true,
       message: 'Office info updated successfully',
-      data: { office: updatedUser.office },
+      data: { office },
     });
   } catch (error: any) {
     console.error('Update office error:', error);
@@ -772,6 +795,8 @@ export const updateOffice = async (req: AuthRequest, res: Response): Promise<voi
 /**
  * Update home location
  * PUT /api/user/home-location
+ * 
+ * Now uses UserProfile table
  */
 export const updateHomeLocation = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
@@ -785,18 +810,28 @@ export const updateHomeLocation = async (req: AuthRequest, res: Response): Promi
       return;
     }
 
-    const homeLocationData = req.body as HomeLocation;
+    const { city, country, latitude, longitude } = req.body;
 
-    const updatedUser = await prisma.user.update({
-      where: { id: userId },
-      data: { homeLocation: homeLocationData as Prisma.InputJsonValue },
-      select: { id: true, homeLocation: true },
+    const profile = await prisma.userProfile.upsert({
+      where: { userId },
+      update: {
+        currentCity: city,
+        latitude: parseFloat(latitude) || null,
+        longitude: parseFloat(longitude) || null,
+        updatedAt: new Date(),
+      },
+      create: {
+        userId,
+        currentCity: city,
+        latitude: parseFloat(latitude) || null,
+        longitude: parseFloat(longitude) || null,
+      },
     });
 
     res.status(200).json({
       success: true,
       message: 'Home location updated successfully',
-      data: { homeLocation: updatedUser.homeLocation },
+      data: { homeLocation: { city: profile.currentCity, latitude: profile.latitude, longitude: profile.longitude } },
     });
   } catch (error: any) {
     console.error('Update home location error:', error);
@@ -829,45 +864,28 @@ export const deleteAccount = async (req: AuthRequest, res: Response): Promise<vo
       return;
     }
 
-    // Get user data to delete associated resources
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: {
-        id: true,
-        profilePhotoPublicId: true,
-        additionalPhotoIds: true,
-        verificationVideoId: true,
-        imagePublicIds: true,
-      },
+    // Get user photos and verification to delete from Cloudinary
+    const photos = await prisma.userPhoto.findMany({
+      where: { userId },
+      select: { publicId: true },
     });
 
-    if (!user) {
-      res.status(404).json({
-        success: false,
-        message: 'User not found',
-      });
-      return;
-    }
+    const verification = await prisma.userVerification.findUnique({
+      where: { userId },
+      select: { videoPublicId: true },
+    });
 
     // Collect all Cloudinary public IDs to delete
     const publicIdsToDelete: string[] = [];
-    
-    if (user.profilePhotoPublicId) {
-      publicIdsToDelete.push(user.profilePhotoPublicId);
+
+    for (const photo of photos) {
+      if (photo.publicId) {
+        publicIdsToDelete.push(photo.publicId);
+      }
     }
-    
-    if (user.additionalPhotoIds && user.additionalPhotoIds.length > 0) {
-      publicIdsToDelete.push(...user.additionalPhotoIds);
-    }
-    
-    if (user.verificationVideoId) {
-      // For videos, we need to delete them separately
-      // Cloudinary deleteImagesFromCloudinary can handle videos too
-      publicIdsToDelete.push(user.verificationVideoId);
-    }
-    
-    if (user.imagePublicIds && user.imagePublicIds.length > 0) {
-      publicIdsToDelete.push(...user.imagePublicIds);
+
+    if (verification?.videoPublicId) {
+      publicIdsToDelete.push(verification.videoPublicId);
     }
 
     // Delete images/videos from Cloudinary
@@ -911,3 +929,178 @@ export const deleteAccount = async (req: AuthRequest, res: Response): Promise<vo
   }
 };
 
+/**
+ * Save dating preferences (for discover onboarding)
+ * POST /api/user/dating-preferences
+ */
+export const saveDatingPreferences = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const userId = req.user?.id;
+
+    if (!userId) {
+      res.status(401).json({
+        success: false,
+        message: 'Unauthorized',
+      });
+      return;
+    }
+
+    const {
+      relationshipType,
+      datingIntention,
+      genderPreference,
+      ageMin,
+      ageMax,
+      distanceMax,
+      children,
+      familyPlans,
+      smoking,
+      drinking,
+      drugs,
+      politics,
+      education,
+    } = req.body;
+
+    // Check if preferences already exist
+    const existingPrefs = await prisma.datingPreferences.findUnique({
+      where: { userId },
+    });
+
+    let preferences;
+    if (existingPrefs) {
+      // Update existing preferences
+      preferences = await prisma.datingPreferences.update({
+        where: { userId },
+        data: {
+          relationshipType: relationshipType || 'open_to_all',
+          datingIntention: datingIntention || 'open_to_all',
+          genderPreference: genderPreference || ['all'],
+          ageMin: ageMin || 18,
+          ageMax: ageMax || 50,
+          distanceMax: distanceMax || 50,
+          children,
+          familyPlans,
+          smoking,
+          drinking,
+          drugs,
+          politics,
+          education,
+          updatedAt: new Date(),
+        },
+      });
+    } else {
+      // Create new preferences
+      preferences = await prisma.datingPreferences.create({
+        data: {
+          userId,
+          relationshipType: relationshipType || 'open_to_all',
+          datingIntention: datingIntention || 'open_to_all',
+          genderPreference: genderPreference || ['all'],
+          ageMin: ageMin || 18,
+          ageMax: ageMax || 50,
+          distanceMax: distanceMax || 50,
+          children,
+          familyPlans,
+          smoking,
+          drinking,
+          drugs,
+          politics,
+          education,
+        },
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Dating preferences saved successfully',
+      data: { preferences },
+    });
+  } catch (error: any) {
+    console.error('Save dating preferences error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to save dating preferences',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined,
+    });
+  }
+};
+
+/**
+ * Complete discover onboarding
+ * POST /api/user/complete-discover-onboarding
+ * 
+ * Marks the user as having completed the discover section onboarding
+ */
+export const completeDiscoverOnboarding = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const userId = req.user?.id;
+
+    if (!userId) {
+      res.status(401).json({
+        success: false,
+        message: 'Unauthorized',
+      });
+      return;
+    }
+
+    // Update user to mark discover onboarding as complete
+    const updatedUser = await prisma.user.update({
+      where: { id: userId },
+      data: {
+        isDiscoverOnboarded: true,
+        updatedAt: new Date(),
+      },
+      select: {
+        id: true,
+        isDiscoverOnboarded: true,
+      },
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'Discover onboarding completed',
+      data: { isDiscoverOnboarded: updatedUser.isDiscoverOnboarded },
+    });
+  } catch (error: any) {
+    console.error('Complete discover onboarding error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to complete discover onboarding',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined,
+    });
+  }
+};
+
+/**
+ * Get dating preferences
+ * GET /api/user/dating-preferences
+ */
+export const getDatingPreferences = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const userId = req.user?.id;
+
+    if (!userId) {
+      res.status(401).json({
+        success: false,
+        message: 'Unauthorized',
+      });
+      return;
+    }
+
+    const preferences = await prisma.datingPreferences.findUnique({
+      where: { userId },
+    });
+
+    res.status(200).json({
+      success: true,
+      data: { preferences },
+    });
+  } catch (error: any) {
+    console.error('Get dating preferences error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get dating preferences',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined,
+    });
+  }
+};

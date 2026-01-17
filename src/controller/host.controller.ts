@@ -489,7 +489,7 @@ export const submitHostAnswer = async (req: AuthRequest, res: Response): Promise
         });
 
         // Send a quick acknowledgment (non-blocking)
-        const io = getSocketIO();
+        // Note: io is already defined above
         if (io && match.chatRoom) {
             const reactions = [
                 "Nice! 👍",

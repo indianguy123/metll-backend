@@ -260,28 +260,19 @@ export const verifyOTP = async (req: AuthRequest, res: Response): Promise<void> 
           phoneNumber: true,
           email: true,
           name: true,
-          bio: true,
-          age: true,
-          gender: true,
-          latitude: true,
-          longitude: true,
-          images: true,
-          profilePhoto: true,
-          additionalPhotos: true,
-          verificationVideo: true,
           isVerified: true,
           isOnboarded: true,
-          verificationStatus: true,
-          school: true,
-          college: true,
-          office: true,
-          homeLocation: true,
-          situationResponses: true,
+          isDiscoverOnboarded: true,
           createdAt: true,
           updatedAt: true,
           referralCode: true,
-          totalReferrals: true, // Return updated stats
+          totalReferrals: true,
           rewardsEarned: true,
+          // Include normalized relations
+          profile: true,
+          photos: true,
+          verification: true,
+          personalityResponses: true,
         },
       });
 
@@ -341,29 +332,36 @@ export const verifyOTP = async (req: AuthRequest, res: Response): Promise<void> 
       phoneNumber: updatedUser.phoneNumber,
     });
 
-    // Build user response (map profilePhoto to photo)
+    // Build user response from normalized data
+    const profile = updatedUser.profile;
+    const photos = updatedUser.photos || [];
+    const verification = updatedUser.verification;
+    const profilePhoto = photos.find((p: any) => p.isProfilePhoto)?.url || null;
+    const additionalPhotos = photos.filter((p: any) => !p.isProfilePhoto).map((p: any) => p.url);
+
     const userResponse = {
       id: updatedUser.id,
       phoneNumber: updatedUser.phoneNumber,
       email: updatedUser.email,
       name: updatedUser.name,
-      bio: updatedUser.bio,
-      age: updatedUser.age,
-      gender: updatedUser.gender,
-      latitude: updatedUser.latitude,
-      longitude: updatedUser.longitude,
-      images: updatedUser.images,
-      photo: updatedUser.profilePhoto,
-      additionalPhotos: updatedUser.additionalPhotos,
-      verificationVideo: updatedUser.verificationVideo,
+      bio: profile?.bio || null,
+      age: profile?.age || null,
+      gender: profile?.gender || null,
+      latitude: profile?.latitude || null,
+      longitude: profile?.longitude || null,
+      images: additionalPhotos,
+      photo: profilePhoto,
+      additionalPhotos: additionalPhotos,
+      verificationVideo: verification?.videoUrl || null,
       isVerified: updatedUser.isVerified,
       isOnboarded: updatedUser.isOnboarded,
-      verificationStatus: updatedUser.verificationStatus,
-      school: updatedUser.school,
-      college: updatedUser.college,
-      office: updatedUser.office,
-      homeLocation: updatedUser.homeLocation,
-      situationResponses: updatedUser.situationResponses,
+      isDiscoverOnboarded: updatedUser.isDiscoverOnboarded,
+      verificationStatus: verification?.status || 'pending',
+      school: null, // Now in separate tables if needed
+      college: null,
+      office: null,
+      homeLocation: profile?.currentCity || null,
+      situationResponses: updatedUser.personalityResponses || [],
       createdAt: updatedUser.createdAt,
       updatedAt: updatedUser.updatedAt,
     };
@@ -407,7 +405,7 @@ export const login = async (req: AuthRequest, res: Response): Promise<void> => {
     // Normalize phone number
     const normalizedPhone = normalizePhoneNumber(phoneNumber);
 
-    // Find user with all fields
+    // Find user with all fields from normalized schema
     const user = await prisma.user.findUnique({
       where: { phoneNumber: normalizedPhone },
       select: {
@@ -416,25 +414,18 @@ export const login = async (req: AuthRequest, res: Response): Promise<void> => {
         email: true,
         password: true,
         name: true,
-        bio: true,
-        age: true,
-        gender: true,
-        latitude: true,
-        longitude: true,
-        images: true,
-        profilePhoto: true,
-        additionalPhotos: true,
-        verificationVideo: true,
         isVerified: true,
         isOnboarded: true,
-        verificationStatus: true,
-        school: true,
-        college: true,
-        office: true,
-        homeLocation: true,
-        situationResponses: true,
+        isDiscoverOnboarded: true,
         createdAt: true,
         updatedAt: true,
+        referralCode: true,
+        totalReferrals: true,
+        rewardsEarned: true,
+        profile: true,
+        photos: true,
+        verification: true,
+        personalityResponses: true,
       },
     });
 
@@ -473,29 +464,36 @@ export const login = async (req: AuthRequest, res: Response): Promise<void> => {
       phoneNumber: user.phoneNumber,
     });
 
-    // Build user response (exclude password, map profilePhoto to photo)
+    // Build user response from normalized data
+    const profile = user.profile;
+    const photos = user.photos || [];
+    const verification = user.verification;
+    const profilePhoto = photos.find((p: any) => p.isProfilePhoto)?.url || null;
+    const additionalPhotos = photos.filter((p: any) => !p.isProfilePhoto).map((p: any) => p.url);
+
     const userResponse = {
       id: user.id,
       phoneNumber: user.phoneNumber,
       email: user.email,
       name: user.name,
-      bio: user.bio,
-      age: user.age,
-      gender: user.gender,
-      latitude: user.latitude,
-      longitude: user.longitude,
-      images: user.images,
-      photo: user.profilePhoto,
-      additionalPhotos: user.additionalPhotos,
-      verificationVideo: user.verificationVideo,
+      bio: profile?.bio || null,
+      age: profile?.age || null,
+      gender: profile?.gender || null,
+      latitude: profile?.latitude || null,
+      longitude: profile?.longitude || null,
+      images: additionalPhotos,
+      photo: profilePhoto,
+      additionalPhotos: additionalPhotos,
+      verificationVideo: verification?.videoUrl || null,
       isVerified: user.isVerified,
       isOnboarded: user.isOnboarded,
-      verificationStatus: user.verificationStatus,
-      school: user.school,
-      college: user.college,
-      office: user.office,
-      homeLocation: user.homeLocation,
-      situationResponses: user.situationResponses,
+      isDiscoverOnboarded: user.isDiscoverOnboarded,
+      verificationStatus: verification?.status || 'pending',
+      school: null,
+      college: null,
+      office: null,
+      homeLocation: profile?.currentCity || null,
+      situationResponses: user.personalityResponses || [],
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
     };
@@ -633,17 +631,20 @@ export const getProfile = async (req: AuthRequest, res: Response): Promise<void>
       select: {
         id: true,
         phoneNumber: true,
+        email: true,
         name: true,
-        bio: true,
-        age: true,
-        gender: true,
-        latitude: true,
-        longitude: true,
-        images: true,
-        imagePublicIds: true,
         isVerified: true,
+        isOnboarded: true,
+        isDiscoverOnboarded: true,
         createdAt: true,
         updatedAt: true,
+        referralCode: true,
+        totalReferrals: true,
+        rewardsEarned: true,
+        profile: true,
+        photos: true,
+        verification: true,
+        personalityResponses: true,
       },
     });
 
@@ -655,10 +656,41 @@ export const getProfile = async (req: AuthRequest, res: Response): Promise<void>
       return;
     }
 
+    // Build user response from normalized data
+    const profile = user.profile;
+    const photos = user.photos || [];
+    const verification = user.verification;
+    const profilePhoto = photos.find((p: any) => p.isProfilePhoto)?.url || null;
+    const additionalPhotos = photos.filter((p: any) => !p.isProfilePhoto).map((p: any) => p.url);
+
+    const userResponse = {
+      id: user.id,
+      phoneNumber: user.phoneNumber,
+      email: user.email,
+      name: user.name,
+      bio: profile?.bio || null,
+      age: profile?.age || null,
+      gender: profile?.gender || null,
+      latitude: profile?.latitude || null,
+      longitude: profile?.longitude || null,
+      images: additionalPhotos,
+      photo: profilePhoto,
+      additionalPhotos: additionalPhotos,
+      verificationVideo: verification?.videoUrl || null,
+      isVerified: user.isVerified,
+      isOnboarded: user.isOnboarded,
+      isDiscoverOnboarded: user.isDiscoverOnboarded,
+      verificationStatus: verification?.status || 'pending',
+      homeLocation: profile?.currentCity || null,
+      situationResponses: user.personalityResponses || [],
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt,
+    };
+
     res.status(200).json({
       success: true,
       data: {
-        user,
+        user: userResponse,
       },
     });
   } catch (error: any) {
@@ -688,12 +720,12 @@ export const updateProfile = async (req: AuthRequest, res: Response): Promise<vo
     const { name, bio, age, gender, latitude, longitude } = req.body;
     const files = req.files as Express.Multer.File[];
 
-    // Get current user to access old images
+    // Get current user with photos
     const currentUser = await prisma.user.findUnique({
       where: { id: req.user.id },
-      select: {
-        images: true,
-        imagePublicIds: true,
+      include: {
+        photos: true,
+        profile: true,
       },
     });
 
@@ -705,20 +737,18 @@ export const updateProfile = async (req: AuthRequest, res: Response): Promise<vo
       return;
     }
 
-    const existingImages = currentUser.images || [];
-    const existingPublicIds = currentUser.imagePublicIds || [];
-    const uploadedImages: string[] = [];
-    const uploadedPublicIds: string[] = [];
+    const existingPhotos = currentUser.photos || [];
+    const uploadedPhotos: { url: string; publicId: string }[] = [];
     const failedUploads: string[] = [];
 
     // Upload new images if provided
     if (files && files.length > 0) {
-      // Validate max 6 images total
-      const currentImageCount = existingImages.length;
-      if (currentImageCount + files.length > 6) {
+      // Validate max 6 photos total
+      const currentPhotoCount = existingPhotos.length;
+      if (currentPhotoCount + files.length > 6) {
         res.status(400).json({
           success: false,
-          message: `Maximum 6 images allowed. You currently have ${currentImageCount} images.`,
+          message: `Maximum 6 photos allowed. You currently have ${currentPhotoCount} photos.`,
         });
         return;
       }
@@ -731,8 +761,7 @@ export const updateProfile = async (req: AuthRequest, res: Response): Promise<vo
             req.user.id,
             'profile'
           );
-          uploadedImages.push(result.url);
-          uploadedPublicIds.push(result.publicId);
+          uploadedPhotos.push({ url: result.url, publicId: result.publicId });
         } catch (error: any) {
           console.error('Image upload error:', error);
           failedUploads.push(file.originalname);
@@ -740,8 +769,8 @@ export const updateProfile = async (req: AuthRequest, res: Response): Promise<vo
       }
 
       // If any uploads failed, cleanup successful ones
-      if (failedUploads.length > 0 && uploadedPublicIds.length > 0) {
-        await deleteImagesFromCloudinary(uploadedPublicIds);
+      if (failedUploads.length > 0 && uploadedPhotos.length > 0) {
+        await deleteImagesFromCloudinary(uploadedPhotos.map(p => p.publicId));
         res.status(500).json({
           success: false,
           message: `Failed to upload some images: ${failedUploads.join(', ')}`,
@@ -750,48 +779,89 @@ export const updateProfile = async (req: AuthRequest, res: Response): Promise<vo
       }
     }
 
-    // Prepare update data
-    const updateData: any = {};
-
-    if (name !== undefined) updateData.name = name;
-    if (bio !== undefined) updateData.bio = bio;
-    if (age !== undefined) updateData.age = age ? parseInt(age) : null;
-    if (gender !== undefined) updateData.gender = gender;
-    if (latitude !== undefined) updateData.latitude = latitude ? parseFloat(latitude) : null;
-    if (longitude !== undefined) updateData.longitude = longitude ? parseFloat(longitude) : null;
-
-    // If new images uploaded, add them to existing ones
-    if (uploadedImages.length > 0) {
-      updateData.images = [...existingImages, ...uploadedImages];
-      updateData.imagePublicIds = [...existingPublicIds, ...uploadedPublicIds];
+    // Update user name if provided
+    if (name !== undefined) {
+      await prisma.user.update({
+        where: { id: req.user.id },
+        data: { name },
+      });
     }
 
-    // Update user
-    const updatedUser = await prisma.user.update({
+    // Upsert profile data (bio, age, gender, location)
+    const profileData: any = {};
+    if (bio !== undefined) profileData.bio = bio;
+    if (age !== undefined) profileData.age = age ? parseInt(age) : null;
+    if (gender !== undefined) profileData.gender = gender;
+    if (latitude !== undefined) profileData.latitude = latitude ? parseFloat(latitude) : null;
+    if (longitude !== undefined) profileData.longitude = longitude ? parseFloat(longitude) : null;
+
+    if (Object.keys(profileData).length > 0) {
+      await prisma.userProfile.upsert({
+        where: { userId: req.user.id },
+        update: profileData,
+        create: {
+          userId: req.user.id,
+          ...profileData,
+        },
+      });
+    }
+
+    // Add new photos to UserPhoto table
+    if (uploadedPhotos.length > 0) {
+      const nextOrder = existingPhotos.length;
+      await prisma.userPhoto.createMany({
+        data: uploadedPhotos.map((photo, index) => ({
+          userId: req.user!.id,
+          url: photo.url,
+          publicId: photo.publicId,
+          order: nextOrder + index,
+          isProfilePhoto: false,
+        })),
+      });
+    }
+
+    // Fetch updated user data
+    const updatedUser = await prisma.user.findUnique({
       where: { id: req.user.id },
-      data: updateData,
-      select: {
-        id: true,
-        phoneNumber: true,
-        name: true,
-        bio: true,
-        age: true,
-        gender: true,
-        latitude: true,
-        longitude: true,
-        images: true,
-        imagePublicIds: true,
-        isVerified: true,
-        createdAt: true,
-        updatedAt: true,
+      include: {
+        profile: true,
+        photos: true,
+        verification: true,
       },
     });
+
+    // Build response
+    const profile = updatedUser?.profile;
+    const photos = updatedUser?.photos || [];
+    const verification = updatedUser?.verification;
+    const profilePhoto = photos.find((p: any) => p.isProfilePhoto)?.url || null;
+    const additionalPhotos = photos.filter((p: any) => !p.isProfilePhoto).map((p: any) => p.url);
+
+    const userResponse = {
+      id: updatedUser?.id,
+      phoneNumber: updatedUser?.phoneNumber,
+      name: updatedUser?.name,
+      bio: profile?.bio || null,
+      age: profile?.age || null,
+      gender: profile?.gender || null,
+      latitude: profile?.latitude || null,
+      longitude: profile?.longitude || null,
+      images: additionalPhotos,
+      photo: profilePhoto,
+      additionalPhotos: additionalPhotos,
+      verificationVideo: verification?.videoUrl || null,
+      isVerified: updatedUser?.isVerified,
+      isOnboarded: updatedUser?.isOnboarded,
+      verificationStatus: verification?.status || 'pending',
+      createdAt: updatedUser?.createdAt,
+      updatedAt: updatedUser?.updatedAt,
+    };
 
     res.status(200).json({
       success: true,
       message: 'Profile updated successfully',
       data: {
-        user: updatedUser,
+        user: userResponse,
       },
     });
   } catch (error: any) {

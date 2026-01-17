@@ -389,31 +389,48 @@ export const getSwipeProfiles = async (req: AuthRequest, res: Response): Promise
         console.log(`[getSwipeProfiles] DEBUG - All users in DB:`, JSON.stringify(allUsersDebug, null, 2));
 
         // Get profiles to show (excluding self and already swiped)
-        // Removed isVerified requirement to show all profiles in database
-        const profiles = await prisma.user.findMany({
+        // Fetch from normalized tables
+        const users = await prisma.user.findMany({
             where: {
                 id: {
                     notIn: excludeIds.length > 0 ? excludeIds : [userId], // Handle empty array case
                 },
             },
-            select: {
-                id: true,
-                name: true,
-                bio: true,
-                age: true,
-                gender: true,
-                images: true,
-                profilePhoto: true,
-                additionalPhotos: true,
-                isVerified: true,
-                latitude: true,
-                longitude: true,
+            include: {
+                profile: true,
+                photos: { orderBy: { order: 'asc' } },
                 school: true,
                 college: true,
                 office: true,
-                situationResponses: true,
+                personalityResponses: true,
             },
             take: 20, // Limit to 20 profiles at a time
+        });
+
+        // Map to frontend-compatible format
+        const profiles = users.map(user => {
+            const profilePhoto = user.photos?.find(p => p.type === 'profile');
+            const additionalPhotos = user.photos?.filter(p => p.type === 'additional')?.map(p => p.url) || [];
+
+            return {
+                id: user.id,
+                name: user.name,
+                bio: user.profile?.bio,
+                age: user.profile?.age,
+                gender: user.profile?.gender,
+                height: user.profile?.height,
+                currentCity: user.profile?.currentCity,
+                latitude: user.profile?.latitude,
+                longitude: user.profile?.longitude,
+                isVerified: user.isVerified,
+                photo: profilePhoto?.url,
+                images: [profilePhoto?.url, ...additionalPhotos].filter(Boolean),
+                additionalPhotos,
+                school: user.school,
+                college: user.college,
+                office: user.office,
+                situationResponses: user.personalityResponses,
+            };
         });
 
         console.log(`[getSwipeProfiles] Found ${profiles.length} profiles for user ${userId}`);
