@@ -3,20 +3,6 @@ import prisma from '../config/database.config';
 import { AuthRequest } from '../types';
 import { extractPublicIdFromUrl, deleteResourcesFromCloudinary } from '../services/cloudinary.service';
 
-// Helper type for casting since generated Match types are missing relations
-interface MatchWithDetails {
-    id: number;
-    user1Id: number;
-    user2Id: number;
-    matchedAt: Date;
-    coffeeTicket: boolean;
-    coffeeTicketCafe: string | null;
-    coffeeTicketExpiry: Date | null;
-    user1: any;
-    user2: any;
-    chatRoom: any;
-}
-
 /**
  * Record a swipe action and check for mutual match
  * POST /api/swipe

@@ -134,14 +134,15 @@ export const initiateCall = async (req: AuthRequest, res: Response): Promise<voi
         // Emit socket event to notify receiver of incoming call
         const io = getSocketIO();
         if (io) {
-            const caller = match.user1Id === userId ? match.user1 : match.user2;
+            const rawCaller: any = match.user1Id === userId ? match.user1 : match.user2;
+            const callerPhoto = rawCaller.photos?.[0]?.url || null;
             const callData = {
                 callId: call.id,
                 matchId,
                 channelName,
                 callerId,
-                callerName: caller.name,
-                callerPhoto: caller.profilePhoto,
+                callerName: rawCaller.name,
+                callerPhoto,
                 type,
                 token: receiverToken,
                 appId: AGORA_APP_ID,

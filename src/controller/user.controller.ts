@@ -715,7 +715,10 @@ export const getUserProfile = async (req: AuthRequest, res: Response): Promise<v
       school: user.school,
       college: user.college,
       office: user.office,
-      homeLocation: user.profile?.currentCity ? { city: user.profile.currentCity } : null,
+      homeLocation: (user.profile?.currentCity || user.profile?.pastCity) ? {
+        current: user.profile?.currentCity ? { city: user.profile.currentCity } : undefined,
+        past: user.profile?.pastCity ? { city: user.profile.pastCity } : undefined,
+      } : null,
       situationResponses: user.personalityResponses,
       datingPrefs: user.datingPrefs,
       createdAt: user.createdAt,
