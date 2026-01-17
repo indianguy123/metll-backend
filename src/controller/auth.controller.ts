@@ -814,8 +814,8 @@ export const updateProfile = async (req: AuthRequest, res: Response): Promise<vo
           userId: req.user!.id,
           url: photo.url,
           publicId: photo.publicId,
+          type: 'additional',
           order: nextOrder + index,
-          isProfilePhoto: false,
         })),
       });
     }

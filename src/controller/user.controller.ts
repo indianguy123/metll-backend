@@ -10,27 +10,7 @@ import {
 } from '../services/cloudinary.service';
 
 // Type definitions for profile data
-interface SchoolInfo {
-  name?: string;
-  location?: string;
-  city?: string;
-  state?: string;
-  class?: string;
-  section?: string;
-}
 
-interface CollegeInfo {
-  name?: string;
-  department?: string;
-  location?: string;
-}
-
-interface OfficeInfo {
-  name?: string;
-  department?: string;
-  designation?: string;
-  location?: string;
-}
 
 interface LocationInfo {
   address?: string;
@@ -38,10 +18,6 @@ interface LocationInfo {
   state?: string;
 }
 
-interface HomeLocation {
-  current?: LocationInfo;
-  past?: LocationInfo;
-}
 
 // SituationResponse type (used for documentation/reference)
 // interface SituationResponse {
@@ -220,7 +196,7 @@ export const uploadProfilePicture = async (req: AuthRequest, res: Response): Pro
           data: {
             url: uploadResult.url,
             publicId: uploadResult.publicId,
-            updatedAt: new Date(),
+            publicId: uploadResult.publicId,
           },
         });
         // Delete old photo from Cloudinary - non-blocking
@@ -559,7 +535,7 @@ export const updateSituationResponses = async (req: AuthRequest, res: Response):
         prisma.personalityResponse.create({
           data: {
             userId,
-            questionId: String(r.questionId),
+            questionId: Number(r.questionId),
             answer: String(r.answer),
           },
         })
@@ -810,7 +786,7 @@ export const updateHomeLocation = async (req: AuthRequest, res: Response): Promi
       return;
     }
 
-    const { city, country, latitude, longitude } = req.body;
+    const { city, latitude, longitude } = req.body;
 
     const profile = await prisma.userProfile.upsert({
       where: { userId },
