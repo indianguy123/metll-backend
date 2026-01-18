@@ -27,6 +27,7 @@ model User {
   
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
+  lastActiveAt  DateTime  @default(now())
 
   // Referral System
   referralCode String @unique @default(cuid())

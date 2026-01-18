@@ -61,6 +61,12 @@ export const recordSwipe = async (req: AuthRequest, res: Response): Promise<void
             },
         });
 
+        // Update user's last active timestamp
+        await prisma.user.update({
+            where: { id: userId },
+            data: { lastActiveAt: new Date() },
+        });
+
         // If it's a pass, just return success
         if (direction === 'pass') {
             res.status(200).json({
@@ -433,7 +439,7 @@ export const getSwipeProfiles = async (req: AuthRequest, res: Response): Promise
         });
         const userLat = currentUser?.profile?.latitude;
         const userLon = currentUser?.profile?.longitude;
-        
+
         console.log(`[getSwipeProfiles] Current user location:`, {
             userId,
             hasProfile: !!currentUser?.profile,
@@ -539,6 +545,7 @@ export const getSwipeProfiles = async (req: AuthRequest, res: Response): Promise
                 college: user.college,
                 office: user.office,
                 situationResponses: user.personalityResponses,
+                lastActiveAt: user.lastActiveAt,
             };
         });
 
