@@ -2,7 +2,7 @@ import { Response } from 'express';
 import prisma from '../config/database.config';
 import { AuthRequest } from '../types';
 import { extractPublicIdFromUrl, deleteResourcesFromCloudinary } from '../services/cloudinary.service';
-import { notifyNewMatch, notifyNewLike, notifyUnmatch } from '../services/notification.service';
+import { notifyNewMatch, notifyNewLike } from '../services/notification.service';
 
 /**
  * Record a swipe action and check for mutual match
